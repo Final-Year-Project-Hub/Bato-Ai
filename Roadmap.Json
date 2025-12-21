@@ -1,0 +1,33 @@
+{
+  "roadmap_id": "uuid",
+  "user_query": "string",
+  "intent_type": "learn | build",
+  "constraints": {
+    "level": "beginner | intermediate | advanced",
+    "time_commitment": "string | null",
+    "focus": "string | null"
+  },
+  "outline": [
+    {
+      "step_id": 1,
+      "title": "string",
+      "status": "locked | active | completed"
+    }
+  ],
+  "expanded_steps": [
+    {
+      "step_id": 1,
+      "title": "string",
+      "description": "string",
+      "why_this_matters": "string",
+      "resources": [
+        {
+          "type": "documentation | tutorial",
+          "source": "string"
+        }
+      ]
+    }
+  ],
+  "current_step": 1,
+  "created_at": "timestamp"
+}
