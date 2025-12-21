@@ -1,2 +1,3 @@
 # Bato-Ai
-This is the AI realted code for the project
+
+This is the AI related code for the project
