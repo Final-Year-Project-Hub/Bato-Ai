@@ -1,11 +1,23 @@
+# Core
 fastapi
 uvicorn
 pydantic
+pydantic-settings
 python-dotenv
 requests
+
+# LLM & AI
+openai
 langchain
 langchain-community
 langchain-text-splitters
+huggingface-hub
+transformers
+sentence-transformers
+tiktoken
+
+# Vector DB
 qdrant-client
-python-dotenv
+
+# Utils
 tqdm

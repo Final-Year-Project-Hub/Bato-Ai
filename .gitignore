@@ -22,3 +22,7 @@ pytest_cache/
 *.tmp
 *.out
 *.class
+*.jar
+docs/
+qdrant_storage/
+
