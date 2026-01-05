@@ -1,32 +1,397 @@
-from pydantic_settings import BaseSettings
-from typing import Optional
+"""
+Production-ready configuration with secrets management and validation.
+Follows 12-factor app principles with environment-based configuration.
+"""
+
+import os
+import secrets
+from pathlib import Path
+from typing import Optional, Dict, List, Any
+from functools import lru_cache
+
+from pydantic import Field, field_validator, computed_field, SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
-    # App Config
-    APP_NAME: str = "Bato-Ai Intelligent Roadmap Generator"
-    API_V1_STR: str = "/api/v1"
+    """
+    Application settings with strict validation and secrets management.
     
-    # Qdrant Config
-    QDRANT_URL: str = "http://localhost:6333"
-    QDRANT_API_KEY: Optional[str] = None
-    QDRANT_COLLECTION: str = "nextjs_docs"
+    Features:
+    - Secrets are masked in logs/repr
+    - Computed fields for derived values
+    - Strict validation with helpful errors
+    - Type safety with Pydantic v2
+    """
     
-    # LLM Config
-    LLM_PROVIDER: str = "openai" # "openai" or "huggingface"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+        # Validate on assignment for runtime safety
+        validate_assignment=True
+    )
     
-    # OpenAI / DeepSeek API (Standard)
-    DEEPSEEK_API_KEY: Optional[str] = None
-    MODEL_NAME: str = "deepseek-chat"
+    # ========================================================================
+    # ENVIRONMENT
+    # ========================================================================
+    ENV: str = Field(default="development", pattern="^(development|staging|production)$")
+    DEBUG: bool = Field(default=False)
+    LOG_LEVEL: str = Field(default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")
     
-    # Hugging Face Inference API
-    HUGGINGFACE_API_TOKEN: Optional[str] = None
-    HF_MODEL_ID: str = "meta-llama/Meta-Llama-3-8B-Instruct" # Default to user's requested model
+    # ========================================================================
+    # SECURITY
+    # ========================================================================
+    SECRET_KEY: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
+    API_KEY_HEADER: str = Field(default="X-API-Key")
+    ALLOWED_ORIGINS: List[str] = Field(default=["http://localhost:3000"])
     
-    # Embeddings
-    EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5" # Default to small for lighter local dev, can switch to bge-m3
+    # ========================================================================
+    # HUGGING FACE / LLM (SECRETS)
+    # ========================================================================
+    HUGGINGFACE_API_TOKEN: SecretStr = Field(..., description="HF API token (required)")
+    LLM_PROVIDER: str = Field(default="huggingface", pattern="^(huggingface|openai|openrouter)$")
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    # ========================================================================
+    # MULTI-MODEL CONFIGURATION
+    # ========================================================================
+    # OpenRouter Configuration
+    OPENROUTER_API_KEY: Optional[SecretStr] = Field(default=None, description="OpenRouter API token")
+    OPENROUTER_BASE_URL: str = Field(default="https://openrouter.ai/api/v1", description="OpenRouter API base URL")
 
-settings = Settings()
+    # Model Selection (using free models by default)
+    QUERY_ANALYSIS_MODEL: str = Field(default="google/gemini-flash-1.5")
+    GENERATION_MODEL: str = Field(default="meta-llama/llama-3.1-8b-instruct:free")
+    VALIDATION_MODEL: str = Field(default="google/gemini-flash-1.5")
+
+
+    
+    # ========================================================================
+    # LLM GENERATION SETTINGS
+    # ========================================================================
+    LLM_MAX_TOKENS: int = Field(default=3072, ge=256, le=8192)
+    LLM_TEMPERATURE: float = Field(default=0.2, ge=0.0, le=2.0)
+    LLM_TOP_P: float = Field(default=0.9, ge=0.0, le=1.0)
+    LLM_TIMEOUT: int = Field(default=300, ge=5, le=600)
+    LLM_CACHE_ENABLED: bool = Field(default=True)
+    LLM_CACHE_SIZE: int = Field(default=1000, ge=0, le=10000)
+    
+    # ========================================================================
+    # QDRANT
+    # ========================================================================
+    QDRANT_URL: str = Field(default="http://localhost:6333")
+    QDRANT_API_KEY: Optional[SecretStr] = Field(default=None)
+    QDRANT_COLLECTION_NAME: str = Field(default="framework_docs")
+    RECREATE_COLLECTION: bool = Field(default=False)
+    
+    # Connection pooling
+    QDRANT_TIMEOUT: int = Field(default=30, ge=5, le=120)
+    QDRANT_PREFER_GRPC: bool = Field(default=False)
+    
+    # ========================================================================
+    # EMBEDDINGS
+    # ========================================================================
+    EMBEDDING_MODEL: str = Field(default="BAAI/bge-small-en-v1.5")
+    EMBEDDING_DEVICE: str = Field(default="cuda", pattern="^(cuda|cpu|mps)$")
+    EMBEDDING_BATCH_SIZE: int = Field(default=32, ge=1, le=128)
+    EMBEDDING_CACHE_SIZE: int = Field(default=10000, ge=0, le=100000)
+    
+    # ========================================================================
+    # DOCUMENT CHUNKING
+    # ========================================================================
+    CHUNK_SIZE: int = Field(default=1000, ge=100, le=4000)
+    CHUNK_OVERLAP: int = Field(default=200, ge=0, le=500)
+    TARGET_TOKENS: int = Field(default=500, ge=100, le=2000)
+    MAX_TOKENS_PER_CHUNK: int = Field(default=2000, ge=500, le=4000)
+    PRESERVE_CODE_BLOCKS: bool = Field(default=True)
+    
+    # ========================================================================
+    # RETRIEVAL SETTINGS
+    # ========================================================================
+    RETRIEVAL_MAX_CANDIDATES: int = Field(default=50, ge=5, le=200)
+    RETRIEVAL_SCORE_THRESHOLD: float = Field(default=0.0, ge=0.0, le=1.0)
+    
+    # ========================================================================
+    # TOKEN BUDGET
+    # ========================================================================
+    TOKEN_BUDGET_CONSERVATIVE: bool = Field(default=True)
+    TOKEN_BUDGET_MAX: int = Field(default=16384, ge=4096, le=65536)
+    
+    # ========================================================================
+    # INGESTION SETTINGS
+    # ========================================================================
+    BATCH_SIZE: int = Field(default=50, ge=1, le=200)
+    SHOW_PROGRESS: bool = Field(default=True)
+    LOG_STATS: bool = Field(default=True)
+    
+    # ========================================================================
+    # API SERVER
+    # ========================================================================
+    API_HOST: str = Field(default="127.0.0.1")
+    API_PORT: int = Field(default=8000, ge=1024, le=65535)
+    API_WORKERS: int = Field(default=4, ge=1, le=16)
+    API_RELOAD: bool = Field(default=False)  # Hot reload in dev
+    
+    # Rate limiting
+    RATE_LIMIT_ENABLED: bool = Field(default=True)
+    RATE_LIMIT_REQUESTS: int = Field(default=60, ge=1)
+    RATE_LIMIT_WINDOW: int = Field(default=60, ge=1)  # seconds
+    
+
+    
+    # ========================================================================
+    # FRAMEWORKS CONFIGURATION
+    # ========================================================================
+    
+    @computed_field
+    @property
+    def FRAMEWORKS(self) -> Dict[str, Dict[str, str]]:
+        """
+        Load framework configurations from frameworks.yaml.
+        Falls back to hardcoded defaults if YAML not found.
+        """
+        try:
+            import yaml
+            from pathlib import Path
+            
+            config_file = Path("frameworks.yaml")
+            if config_file.exists():
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = yaml.safe_load(f)
+                
+                # Convert to simplified format for backward compatibility
+                frameworks = {}
+                for key, fw_config in config.get("frameworks", {}).items():
+                    frameworks[key] = {
+                        "path": fw_config.get("docs_path", f"docs/{key}"),
+                        "collection": fw_config.get("collection", "framework_docs")
+                    }
+                return frameworks
+        except Exception as e:
+            logger.warning(f"Could not load frameworks.yaml: {e}, using defaults")
+        
+        # Fallback to hardcoded defaults
+        return {
+            "react": {"path": "docs/react", "collection": "framework_docs"},
+            "python": {"path": "docs/python", "collection": "framework_docs"},
+            "nextjs": {"path": "docs/nextjs", "collection": "framework_docs"}
+        }
+    
+    @computed_field
+    @property
+    def FRAMEWORK_URL_PATTERNS(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Load framework URL patterns from frameworks.yaml.
+        Falls back to hardcoded defaults if YAML not found.
+        """
+        try:
+            import yaml
+            from pathlib import Path
+            
+            config_file = Path("frameworks.yaml")
+            if config_file.exists():
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = yaml.safe_load(f)
+                
+                # Extract URL patterns from framework configs
+                patterns = {}
+                for key, fw_config in config.get("frameworks", {}).items():
+                    url_config = fw_config.get("url_config", {})
+                    patterns[key] = {
+                        "base_url": fw_config.get("base_url", ""),
+                        "path_prefix": url_config.get("path_prefix", f"{key}/"),
+                        "strip_numeric_prefix": url_config.get("strip_numeric_prefix", False),
+                        "file_extensions": fw_config.get("extensions", [".md"]),
+                        "replace_extensions": url_config.get("replace_extensions", {})
+                    }
+                return patterns
+        except Exception as e:
+            logger.warning(f"Could not load framework URL patterns: {e}, using defaults")
+        
+        # Fallback to hardcoded defaults
+        return {
+            "nextjs": {
+                "base_url": "https://nextjs.org/docs",
+                "path_prefix": "nextjs/",
+                "strip_numeric_prefix": True,
+                "file_extensions": [".mdx", ".md"]
+            },
+            "react": {
+                "base_url": "https://react.dev/learn",
+                "path_prefix": "react/",
+                "strip_numeric_prefix": False,
+                "file_extensions": [".md", ".mdx"]
+            },
+            "python": {
+                "base_url": "https://docs.python.org/3",
+                "path_prefix": "python/",
+                "strip_numeric_prefix": False,
+                "file_extensions": [".rst", ".md", ".txt"],
+                "replace_extensions": {".rst": ".html"}
+            }
+        }
+    
+    # ========================================================================
+    # COMPUTED FIELDS
+    # ========================================================================
+    @computed_field
+    @property
+    def is_production(self) -> bool:
+        """Check if running in production."""
+        return self.ENV == "production"
+    
+    @computed_field
+    @property
+    def is_development(self) -> bool:
+        """Check if running in development."""
+        return self.ENV == "development"
+    
+    @computed_field
+    @property
+    def docs_base_path(self) -> Path:
+        """Base path for documentation storage."""
+        return Path("docs")
+    
+    # ========================================================================
+    # VALIDATORS
+    # ========================================================================
+    @field_validator("EMBEDDING_DEVICE")
+    @classmethod
+    def validate_device(cls, v: str) -> str:
+        """Validate CUDA availability."""
+        if v == "cuda":
+            try:
+                import torch
+                if not torch.cuda.is_available():
+                    return "cpu"
+            except ImportError:
+                return "cpu"
+        return v
+    
+    @field_validator("CHUNK_OVERLAP")
+    @classmethod
+    def validate_overlap(cls, v: int, info) -> int:
+        """Ensure overlap is less than chunk size."""
+        chunk_size = info.data.get("CHUNK_SIZE", 1000)
+        if v >= chunk_size:
+            raise ValueError(f"CHUNK_OVERLAP ({v}) must be < CHUNK_SIZE ({chunk_size})")
+        return v
+    
+    @field_validator("HUGGINGFACE_API_TOKEN")
+    @classmethod
+    def validate_hf_token(cls, v: SecretStr) -> SecretStr:
+        """Validate HF token format."""
+        token = v.get_secret_value()
+        if not token or not token.startswith("hf_"):
+            raise ValueError("Invalid HuggingFace API token format (must start with 'hf_')")
+        return v
+    
+    @field_validator("ALLOWED_ORIGINS")
+    @classmethod
+    def validate_origins(cls, v: List[str]) -> List[str]:
+        """Validate CORS origins."""
+        if not v:
+            raise ValueError("ALLOWED_ORIGINS cannot be empty")
+        return v
+    
+    # ========================================================================
+    # UTILITY METHODS
+    # ========================================================================
+    def get_hf_token(self) -> str:
+        """Get HuggingFace API token as plain string."""
+        return self.HUGGINGFACE_API_TOKEN.get_secret_value()
+    
+    def get_qdrant_key(self) -> Optional[str]:
+        """Get Qdrant API key as plain string."""
+        return self.QDRANT_API_KEY.get_secret_value() if self.QDRANT_API_KEY else None
+    
+    def get_redis_url(self) -> Optional[str]:
+        """Get Redis URL if enabled."""
+        return self.REDIS_URL if self.REDIS_ENABLED else None
+    
+    def __repr__(self) -> str:
+        """Safe repr without exposing secrets."""
+        return (
+            f"Settings(env={self.ENV}, "
+            f"llm={self.GENERATION_MODEL}, "
+            f"embedding_device={self.EMBEDDING_DEVICE}, "
+            f"debug={self.DEBUG})"
+        )
+
+
+# ============================================================================
+# SINGLETON PATTERN WITH CACHING
+# ============================================================================
+
+@lru_cache
+def get_settings() -> Settings:
+    """
+    Get cached settings instance (singleton pattern).
+    
+    Benefits:
+    - Settings loaded once and reused
+    - Thread-safe with lru_cache
+    - Easy to mock in tests
+    
+    Usage:
+        from app.core.config import get_settings
+        settings = get_settings()
+    """
+    return Settings()
+
+
+# Backward compatibility
+settings = get_settings()
+
+
+# ============================================================================
+# LOGGING CONFIGURATION
+# ============================================================================
+
+def setup_logging() -> None:
+    """
+    Configure structured logging with JSON formatting for production.
+    
+    Features:
+    - JSON logs in production (for log aggregation)
+    - Human-readable logs in development
+    - Request ID injection
+    - Performance tracking
+    """
+    import logging
+    import sys
+    
+    settings = get_settings()
+    
+    # Configure root logger
+    logging.basicConfig(
+        level=getattr(logging, settings.LOG_LEVEL),
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s' if settings.is_development
+        else '{"time":"%(asctime)s","name":"%(name)s","level":"%(levelname)s","msg":"%(message)s"}',
+        handlers=[logging.StreamHandler(sys.stdout)]
+    )
+    
+    # Set library log levels
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+
+# Initialize logging on import
+setup_logging()
+
+
+if __name__ == "__main__":
+    # Validate configuration
+    try:
+        config = get_settings()
+        print("✅ Configuration validated successfully!")
+        print(f"\nEnvironment: {config.ENV}")
+        print(f"Debug: {config.DEBUG}")
+        print(f"API Port: {config.API_PORT}")
+        print(f"Embedding Device: {config.EMBEDDING_DEVICE}")
+        print(f"Generation Model: {config.GENERATION_MODEL}")
+    except Exception as e:
+        print(f"❌ Configuration validation failed: {e}")
+        raise

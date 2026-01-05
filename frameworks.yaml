@@ -1,0 +1,115 @@
+# Framework Configuration
+# Add new frameworks by editing this file - no code changes needed!
+
+frameworks:
+  nextjs:
+    name: "Next.js"
+    key: "nextjs"
+    base_url: "https://nextjs.org/docs"
+    docs_path: "docs/nextjs"
+    collection: "framework_docs"
+    version: "14"
+
+    # File handling
+    extensions:
+      - ".mdx"
+      - ".md"
+    subdirectory: null
+
+    # Preprocessing rules
+    preprocessing:
+      remove_patterns:
+        - "^import .+$"
+        - "^export .+$"
+        - "'use (client|server)';?"
+      clean_whitespace: true
+
+    # URL construction
+    url_config:
+      path_prefix: "nextjs/"
+      strip_numeric_prefix: true
+      replace_extensions: {}
+
+    # Git repository for downloading docs
+    git_repo: "https://github.com/vercel/next.js.git"
+    git_branch: "canary"
+    git_sparse_paths:
+      - "docs"
+
+  react:
+    name: "React"
+    key: "react"
+    base_url: "https://react.dev/learn"
+    docs_path: "docs/react"
+    collection: "framework_docs"
+    version: "18"
+
+    extensions:
+      - ".md"
+      - ".mdx"
+    subdirectory: "src/content"
+
+    preprocessing:
+      remove_patterns:
+        - "^import .+$"
+        - "'use [^']+';?"
+      clean_whitespace: true
+
+    url_config:
+      path_prefix: "react/"
+      strip_numeric_prefix: false
+      replace_extensions: {}
+
+    # Git repository for downloading docs
+    git_repo: "https://github.com/reactjs/react.dev.git"
+    git_branch: "main"
+    git_sparse_paths:
+      - "src/content"
+
+  python:
+    name: "Python"
+    key: "python"
+    base_url: "https://docs.python.org/3"
+    docs_path: "docs/python"
+    collection: "framework_docs"
+    version: "3.12"
+
+    extensions:
+      - ".rst"
+      - ".md"
+      - ".txt"
+    subdirectory: "Doc"
+
+    preprocessing:
+      remove_patterns:
+        - "^\\.\\.\\s+\\w+::.*$" # Sphinx directives
+      clean_whitespace: true
+
+    url_config:
+      path_prefix: "python/"
+      strip_numeric_prefix: false
+      replace_extensions:
+        ".rst": ".html"
+
+    # Git repository for downloading docs
+    git_repo: "https://github.com/python/cpython.git"
+    git_branch: "3.12"
+    git_sparse_paths:
+      - "Doc"
+# vue:
+#   name: "Vue.js"
+#   key: "vue"
+#   base_url: "https://vuejs.org/guide"
+#   docs_path: "docs/vue"
+#   collection: "framework_docs"
+#   version: "3"
+#   extensions:
+#     - ".md"
+#   subdirectory: null
+#   preprocessing:
+#     remove_patterns: []
+#     clean_whitespace: true
+#   url_config:
+#     path_prefix: "vue/"
+#     strip_numeric_prefix: false
+#     replace_extensions: {}
