@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: bato-ai-api
+    runtime: docker
+    region: singapore # Optional: Choose a region close to your users
+    plan: free # Suggesting free plan initially
+
+    # Environment variables that are safe to commit
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: PORT
+        value: 8000
+      - key: ENV
+        value: production
+      - key: EMBEDDING_DEVICE
+        value: cpu # IMPORTANT: Render instances typically don't have GPUs
+      - key: QDRANT_URL
+        sync: false # User must provide this (likely Qdrant Cloud URL)
+      - key: OPENROUTER_API_KEY
+        sync: false # User must provide this
+      - key: HUGGINGFACE_API_TOKEN
+        sync: false # User must provide this
+      - key: QDRANT_API_KEY
+        sync: false # User must provide this if using Qdrant Cloud
+
+    # Health check to ensure zero-downtime deploys
+    healthCheckPath: /health
