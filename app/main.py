@@ -125,13 +125,46 @@ async def lifespan(app: FastAPI):
         
         # 2. Initialize Embedder
         logger.info("Loading embedder...")
+        
+        # FAILSAFE: Force API provider if in production and on CPU to prevent OOM
+        # This handles cases where render.yaml env vars might not have synced yet
+        embedding_provider = settings.EMBEDDING_PROVIDER
+        if settings.is_production and settings.EMBEDDING_DEVICE == "cpu":
+            if embedding_provider != "api":
+                logger.warning("⚠️ Production CPU detected: Forcing API embedder to prevent OOM")
+                embedding_provider = "api"
+
         # Use factory to support API fallback based on env vars
-        from app.ingestion.embedder import create_embedder
-        state.embedder = create_embedder(
+        from app.ingestion.embedder import create_embedder, EmbedderConfig
+        
+        # We manually create config to override the provider if needed
+        # (create_embedder reads settings by default if we just passed args, 
+        # but better to be explicit here to ensure our override works)
+        
+        # Actually create_embedder factory reads provider from settings.
+        # So we should modify the settings object or pass explicit config.
+        # create_embedder doesn't accept provider as arg in my previous implementation? 
+        # Let's check embedder.py... Yes it does not take provider arg in create_embedder!
+        # It reads from settings.EMBEDDING_PROVIDER.
+        
+        # So I must patch settings OR instantiate APIEmbedder directly.
+        # Let's instantiate explicitly based on our logic.
+        
+        from app.ingestion.embedder import APIEmbedder, HuggingFaceEmbedder, EmbedderConfig
+        
+        embedder_config = EmbedderConfig(
             model=settings.EMBEDDING_MODEL,
             device=settings.EMBEDDING_DEVICE,
+            provider=embedding_provider,
+            api_token=settings.get_hf_token(),
             cache_enabled=True
         )
+        
+        if embedding_provider == "api":
+            state.embedder = APIEmbedder(embedder_config)
+        else:
+            state.embedder = HuggingFaceEmbedder(embedder_config)
+            
         logger.info(f"✅ Embedder ready: {state.embedder.config.model} ({state.embedder.config.provider})")
         
         # 3. Initialize LLMs
