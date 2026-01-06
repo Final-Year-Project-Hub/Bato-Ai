@@ -428,20 +428,86 @@ class QdrantIngestor:
                 disable=not self.ingest_config.show_progress
             ):
                 batch_chunks = all_chunks[batch_idx:batch_idx + batch_size]
-                batch_texts = [c.page_content for c in batch_chunks]
+                
+                # Check for existing points to avoid re-embedding
+                existing_ids = set()
+                # Pre-calculate IDs for this batch
+                batch_ids = []
+                for i, chunk in enumerate(batch_chunks):
+                    idx_in_all = batch_idx + i
+                    # Replicate logic from _create_points
+                    # Note: We must ensure this logic stays 1:1 with _create_points or refactor
+                    # Ideally we refactor _create_points to accept pre-calculated IDs, 
+                    # but for minimal diff we just replicate the ID gen here carefully.
+                    # _generate_point_id uses: content[:100], batch_id * 1000 + idx
+                    # Wait, _create_points uses 'batch_idx // batch_size' passed as 'batch_id'
+                    # and then 'batch_id * 1000 + idx'. This logic is weird/unstable if batch size changes.
+                    # But assuming batch size is constant:
+                    # current_batch_id = batch_idx // batch_size
+                    # global_idx = current_batch_id * 1000 + i (Wait, this logic in _create_points seems potentially buggy if batch > 1000? No, just an offset)
+                    
+                    # Look at _create_points call:
+                    # points = self._create_points(batch_chunks, embeddings, batch_idx // batch_size)
+                    
+                    # Inside _create_points:
+                    # point_id = self._generate_point_id(chunk.page_content, batch_id * 1000 + idx)
+                    
+                    # Let's replicate this exact ID generation
+                    current_batch_id = batch_idx // batch_size
+                    pid = self._generate_point_id(chunk.page_content, current_batch_id * 1000 + i)
+                    batch_ids.append(pid)
+
+                try:
+                    # Check existence in Qdrant
+                    # API: retrieve(collection_name, ids, with_payload=False, with_vectors=False)
+                    existing_points = self.qdrant_client.retrieve(
+                        collection_name=self.ingest_config.collection_name,
+                        ids=batch_ids,
+                        with_payload=False,
+                        with_vectors=False
+                    )
+                    existing_ids = {p.id for p in existing_points}
+                except Exception as ex:
+                    logger.warning(f"Failed to check existing points: {ex}. Proceeding with all.")
+                
+                # Filter chunks that need embedding
+                chunks_to_embed = []
+                indices_to_embed = []
+                
+                for i, chunk in enumerate(batch_chunks):
+                    if batch_ids[i] not in existing_ids:
+                        chunks_to_embed.append(chunk)
+                        indices_to_embed.append(i)
+                    else:
+                        self.stats.chunks_indexed += 1 # Count as success (skipped)
+
+                if not chunks_to_embed:
+                    # All skipped
+                    continue
+
+                batch_texts = [c.page_content for c in chunks_to_embed]
                 
                 try:
-                    # Embed batch
+                    # Embed batch (only missing)
                     embed_start = time.time()
                     embeddings = self.embedder.embed_documents(batch_texts)
                     self.stats.embedding_time += time.time() - embed_start
                     
-                    # Create points
-                    points = self._create_points(
-                        batch_chunks,
-                        embeddings,
-                        batch_idx // batch_size
-                    )
+                    # Create points for just the new ones
+                    # We need to use the original indices to maintain correct IDs
+                    points = []
+                    for local_idx, embedding in zip(indices_to_embed, embeddings):
+                        chunk = batch_chunks[local_idx]
+                        point_id = batch_ids[local_idx] # We already calc'd this
+                        payload = self._prepare_payload(chunk)
+                        
+                        points.append(
+                            PointStruct(
+                                id=point_id,
+                                vector=embedding,
+                                payload=payload
+                            )
+                        )
                     
                     # Index in Qdrant
                     index_start = time.time()
