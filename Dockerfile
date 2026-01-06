@@ -22,7 +22,8 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Install Python dependencies
-COPY requirements.txt .
+# Use lightweight requirements for production (removes torch/transformers)
+COPY requirements-light.txt requirements.txt
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
