@@ -106,7 +106,7 @@ class APIEmbedder(BaseEmbedder):
         if not self.config.api_token:
             raise ValueError("API token required for APIEmbedder")
             
-        self.api_url = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{self.config.model}"
+        self.api_url = f"https://router.huggingface.co/hf-inference/models/{self.config.model}"
         self.headers = {"Authorization": f"Bearer {self.config.api_token}"}
         
         # Determine dimension (hardcoded for common models to avoid initial network call)
