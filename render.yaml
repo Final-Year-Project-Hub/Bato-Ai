@@ -15,6 +15,8 @@ services:
         value: production
       - key: EMBEDDING_DEVICE
         value: cpu # IMPORTANT: Render instances typically don't have GPUs
+      - key: EMBEDDING_PROVIDER
+        value: api # Uses API instead of loading model in memory
       - key: QDRANT_URL
         sync: false # User must provide this (likely Qdrant Cloud URL)
       - key: OPENROUTER_API_KEY

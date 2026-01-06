@@ -93,6 +93,7 @@ class Settings(BaseSettings):
     # EMBEDDINGS
     # ========================================================================
     EMBEDDING_MODEL: str = Field(default="BAAI/bge-small-en-v1.5")
+    EMBEDDING_PROVIDER: str = Field(default="local", pattern="^(local|api)$")
     EMBEDDING_DEVICE: str = Field(default="cuda", pattern="^(cuda|cpu|mps)$")
     EMBEDDING_BATCH_SIZE: int = Field(default=32, ge=1, le=128)
     EMBEDDING_CACHE_SIZE: int = Field(default=10000, ge=0, le=100000)

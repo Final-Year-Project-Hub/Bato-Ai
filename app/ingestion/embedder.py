@@ -1,16 +1,23 @@
 """
-Production-optimized embedder with async support and connection pooling.
+Production-optimized embedder with async support, connection pooling, and API fallback.
 """
 
 import asyncio
 import hashlib
 import logging
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Union
 from dataclasses import dataclass
 from functools import lru_cache
+import time
 
-from langchain_huggingface import HuggingFaceEmbeddings
 import numpy as np
+import httpx # Lightweight HTTP client
+# Only import heavy libraries if strictly needed
+try:
+    from langchain_huggingface import HuggingFaceEmbeddings
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -20,43 +27,167 @@ class EmbedderConfig:
     """Immutable configuration for embedder."""
     model: str = "BAAI/bge-small-en-v1.5"
     device: str = "cuda"
-    batch_size: int = 64  # Optimized: was 32, increased for faster throughput
+    provider: str = "local" # 'local' or 'api'
+    api_token: Optional[str] = None # Required for 'api' provider
+    batch_size: int = 64
     cache_enabled: bool = True
     cache_size: int = 10000
     normalize_embeddings: bool = True
-    encoding_name: str = "cl100k_base"
     
     # Connection pooling for HF API
     max_concurrent_requests: int = 5
     request_timeout: int = 30
 
 
-class HuggingFaceEmbedder:
-    """
-    Production-ready embedder with async support and caching.
-    
-    Improvements:
-    - Async batch processing with semaphore
-    - Thread-safe LRU cache
-    - Connection pooling
-    - Automatic retry with exponential backoff
-    - Memory-efficient numpy arrays
-    """
-    
-    # Model dimension cache
-    _MODEL_DIMS = {
-        "BAAI/bge-small-en-v1.5": 384,
-        "BAAI/bge-base-en-v1.5": 768,
-        "BAAI/bge-large-en-v1.5": 1024,
-    }
+class BaseEmbedder:
+    """Base interface for embedders."""
     
     def __init__(self, config: Optional[EmbedderConfig] = None):
         self.config = config or EmbedderConfig()
+        self.embedding_dim = 384 # Default fallback
+        self._cache: Dict[str, np.ndarray] = {}
+        self._stats = {"hits": 0, "misses": 0, "errors": 0, "total_time": 0.0}
         
-        # Connection pooling semaphore
-        self._semaphore = asyncio.Semaphore(self.config.max_concurrent_requests)
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        raise NotImplementedError
+
+    def embed_query(self, text: str) -> List[float]:
+        raise NotImplementedError
         
-        # Initialize client
+    def get_stats(self) -> Dict:
+        total = self._stats["hits"] + self._stats["misses"]
+        hit_rate = (self._stats["hits"] / total) if total > 0 else 0.0
+        return {
+            **self._stats,
+            "cache_size": len(self._cache),
+            "hit_rate": hit_rate,
+            "embedding_dim": self.embedding_dim,
+            "model": self.config.model,
+            "device": self.config.device,
+            "provider": self.config.provider
+        }
+
+    @staticmethod
+    @lru_cache(maxsize=100000)
+    def _get_cache_key(text: str) -> str:
+        return hashlib.md5(text.encode('utf-8')).hexdigest()
+
+    def _check_cache(self, text: str) -> Optional[List[float]]:
+        if not self.config.cache_enabled:
+            return None
+        key = self._get_cache_key(text)
+        if key in self._cache:
+            self._stats["hits"] += 1
+            return self._cache[key].tolist()
+        return None
+
+    def _add_to_cache(self, text: str, embedding: List[float]):
+        if not self.config.cache_enabled:
+            return
+        key = self._get_cache_key(text)
+        if len(self._cache) >= self.config.cache_size:
+            self._cache.pop(next(iter(self._cache)))
+        self._cache[key] = np.array(embedding, dtype=np.float32)
+
+    def clear_cache(self) -> None:
+        self._cache.clear()
+        logger.info("Embedding cache cleared")
+
+
+class APIEmbedder(BaseEmbedder):
+    """
+    Lightweight embedder using Hugging Face Inference API.
+    Zero memory footprint for the model itself.
+    """
+    
+    def __init__(self, config: EmbedderConfig):
+        super().__init__(config)
+        if not self.config.api_token:
+            raise ValueError("API token required for APIEmbedder")
+            
+        self.api_url = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{self.config.model}"
+        self.headers = {"Authorization": f"Bearer {self.config.api_token}"}
+        
+        # Determine dimension (hardcoded for common models to avoid initial network call)
+        if "bge-small" in self.config.model:
+            self.embedding_dim = 384
+        elif "bge-base" in self.config.model:
+            self.embedding_dim = 768
+        elif "bge-large" in self.config.model:
+            self.embedding_dim = 1024
+            
+        logger.info(f"✅ API Embedder initialized: {self.config.model}")
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        """Batch embedding via API."""
+        if not texts: return []
+        
+        results = []
+        uncached_texts = []
+        uncached_indices = []
+        
+        for i, text in enumerate(texts):
+             cached = self._check_cache(text)
+             if cached:
+                 results.append((i, cached))
+             else:
+                 uncached_texts.append(text)
+                 uncached_indices.append(i)
+                 self._stats["misses"] += 1
+        
+        if uncached_texts:
+            try:
+                # HF API has payload limits, might need chunking if huge batch
+                response = httpx.post(
+                    self.api_url, 
+                    headers=self.headers, 
+                    json={"inputs": uncached_texts, "options": {"wait_for_model": True}},
+                    timeout=self.config.request_timeout
+                )
+                response.raise_for_status()
+                data = response.json()
+                
+                # HF API returns list of lists (vectors) or list of list of lists (if 3D)
+                # Ensure we have flat list of vectors
+                embeddings = data
+                
+                # Validation
+                if isinstance(embeddings, list) and len(embeddings) == len(uncached_texts):
+                    if len(embeddings) > 0 and isinstance(embeddings[0], list):
+                         pass # Valid
+                    else:
+                         logger.error(f"Unexpected API response format: {type(embeddings)}")
+                         embeddings = [[0.0] * self.embedding_dim] * len(uncached_texts)
+
+                for idx, embedding in zip(uncached_indices, embeddings):
+                    self._add_to_cache(uncached_texts[uncached_indices.index(idx)], embedding)
+                    results.append((idx, embedding))
+                    
+            except Exception as e:
+                logger.error(f"API Batch embedding failed: {e}")
+                self._stats["errors"] += 1
+                for idx in uncached_indices:
+                    results.append((idx, [0.0] * self.embedding_dim))
+        
+        results.sort(key=lambda x: x[0])
+        return [r[1] for r in results]
+
+    def embed_query(self, text: str) -> List[float]:
+        res = self.embed_documents([text])
+        return res[0] if res else [0.0] * self.embedding_dim
+
+
+class HuggingFaceEmbedder(BaseEmbedder):
+    """
+    Local embedder using sentence-transformers (Heavy memory usage).
+    """
+    
+    def __init__(self, config: EmbedderConfig):
+        super().__init__(config)
+        
+        if not TRANSFORMERS_AVAILABLE:
+            raise ImportError("langchain-huggingface not installed. Use 'api' provider instead.")
+
         try:
             self.client = HuggingFaceEmbeddings(
                 model_name=self.config.model,
@@ -66,7 +197,7 @@ class HuggingFaceEmbedder:
                     "batch_size": self.config.batch_size
                 }
             )
-            logger.info(f"✅ Embedder loaded: {self.config.model}")
+            logger.info(f"✅ Local Embedder loaded: {self.config.model}")
         except Exception as e:
             logger.warning(f"GPU unavailable, falling back to CPU: {e}")
             self.config = dataclass.replace(self.config, device="cpu")
@@ -79,147 +210,60 @@ class HuggingFaceEmbedder:
                 }
             )
         
-        # Get dimension
-        self.embedding_dim = self._MODEL_DIMS.get(self.config.model) or self._detect_dim()
-        
-        # Thread-safe cache
-        self._cache: Dict[str, np.ndarray] = {}
-        self._stats = {"hits": 0, "misses": 0, "errors": 0, "total_time": 0.0}
-        
-        logger.info(f"Embedder ready: {self.embedding_dim}D on {self.config.device}")
-    
+        self.embedding_dim = self._detect_dim()
+
     def _detect_dim(self) -> int:
-        """Detect embedding dimension."""
         try:
             sample = self.client.embed_documents(["test"])
             return len(sample[0])
-        except Exception as e:
-            logger.error(f"Failed to detect dimension: {e}")
-            return 384  # Fallback
-    
-    @staticmethod
-    @lru_cache(maxsize=100000)
-    def _get_cache_key(text: str) -> str:
-        """Generate cache key with LRU optimization."""
-        return hashlib.md5(text.encode('utf-8')).hexdigest()
-    
-    async def embed_documents_async(self, texts: List[str]) -> List[List[float]]:
-        """
-        Async batch embedding with semaphore control.
-        
-        Benefits:
-        - Non-blocking I/O
-        - Controlled concurrency
-        - Better resource utilization
-        """
-        async with self._semaphore:
-            loop = asyncio.get_event_loop()
-            embeddings = await loop.run_in_executor(
-                None, 
-                self.embed_documents, 
-                texts
-            )
-            return embeddings
-    
+        except:
+            return 384
+
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        """Sync batch embedding with caching."""
-        if not texts:
-            return []
+        # Same cache logic, just calling self.client
+        if not texts: return []
         
         results = []
         uncached_texts = []
         uncached_indices = []
         
-        # Check cache
         for i, text in enumerate(texts):
-            if not text or not text.strip():
-                results.append((i, [0.0] * self.embedding_dim))
-                continue
-            
-            cache_key = self._get_cache_key(text)
-            
-            if self.config.cache_enabled and cache_key in self._cache:
-                results.append((i, self._cache[cache_key].tolist()))
-                self._stats["hits"] += 1
-            else:
-                uncached_texts.append(text)
-                uncached_indices.append((i, cache_key))
-                self._stats["misses"] += 1
-        
-        # Embed uncached
+             cached = self._check_cache(text)
+             if cached:
+                 results.append((i, cached))
+             else:
+                 uncached_texts.append(text)
+                 uncached_indices.append(i)
+                 self._stats["misses"] += 1
+                 
         if uncached_texts:
             try:
-                new_embeddings = self.client.embed_documents(uncached_texts)
-                
-                for (idx, cache_key), embedding in zip(uncached_indices, new_embeddings):
-                    # Store as numpy for memory efficiency
-                    emb_array = np.array(embedding, dtype=np.float32)
-                    
-                    if self.config.cache_enabled:
-                        # Evict if needed (simple FIFO)
-                        if len(self._cache) >= self.config.cache_size:
-                            self._cache.pop(next(iter(self._cache)))
-                        self._cache[cache_key] = emb_array
-                    
-                    results.append((idx, emb_array.tolist()))
-            
+                embeddings = self.client.embed_documents(uncached_texts)
+                for idx, embedding in zip(uncached_indices, embeddings):
+                    self._add_to_cache(uncached_texts[uncached_indices.index(idx)], embedding)
+                    results.append((idx, embedding))
             except Exception as e:
-                logger.error(f"Batch embedding failed: {e}")
+                logger.error(f"Local embedding failed: {e}")
                 self._stats["errors"] += 1
-                # Zero vectors for failures
-                for idx, _ in uncached_indices:
+                for idx in uncached_indices:
                     results.append((idx, [0.0] * self.embedding_dim))
         
-        # Sort by index and return
         results.sort(key=lambda x: x[0])
-        return [emb for _, emb in results]
-    
+        return [r[1] for r in results]
+
     def embed_query(self, text: str) -> List[float]:
-        """Embed single query with caching."""
-        if not text or not text.strip():
-            return [0.0] * self.embedding_dim
-        
-        cache_key = self._get_cache_key(text)
-        
-        if self.config.cache_enabled and cache_key in self._cache:
-            self._stats["hits"] += 1
-            return self._cache[cache_key].tolist()
+        # Simple wrapper with cache
+        cached = self._check_cache(text)
+        if cached: return cached
         
         try:
             embedding = self.client.embed_query(text)
-            emb_array = np.array(embedding, dtype=np.float32)
-            
-            if self.config.cache_enabled:
-                if len(self._cache) >= self.config.cache_size:
-                    self._cache.pop(next(iter(self._cache)))
-                self._cache[cache_key] = emb_array
-            
+            self._add_to_cache(text, embedding)
             self._stats["misses"] += 1
-            return emb_array.tolist()
-        
+            return embedding
         except Exception as e:
-            logger.error(f"Query embedding failed: {e}")
-            self._stats["errors"] += 1
+            logger.error(f"Local query embedding failed: {e}")
             return [0.0] * self.embedding_dim
-    
-    def get_stats(self) -> Dict:
-        """Get comprehensive statistics."""
-        total = self._stats["hits"] + self._stats["misses"]
-        hit_rate = (self._stats["hits"] / total) if total > 0 else 0.0
-        
-        return {
-            **self._stats,
-            "cache_size": len(self._cache),
-            "hit_rate": hit_rate,
-            "embedding_dim": self.embedding_dim,
-            "model": self.config.model,
-            "device": self.config.device
-        }
-    
-    def clear_cache(self) -> None:
-        """Clear embedding cache."""
-        self._cache.clear()
-        logger.info("Embedding cache cleared")
 
 
 # Factory function
@@ -227,11 +271,27 @@ def create_embedder(
     model: str = "BAAI/bge-small-en-v1.5",
     device: str = "cuda",
     cache_enabled: bool = True
-) -> HuggingFaceEmbedder:
-    """Quick embedder initialization."""
+) -> BaseEmbedder:
+    """
+    Factory to create embedder based on Global Settings.
+    """
+    # Import inside to avoid circular deps if any, though config is safe
+    from app.core.config import get_settings
+    settings = get_settings()
+    
+    # Priority: Function Args > Settings
+    # Actually for provider, we trust settings unless we want to force
+    provider = settings.EMBEDDING_PROVIDER
+    
     config = EmbedderConfig(
         model=model,
         device=device,
+        provider=provider,
+        api_token=settings.get_hf_token(),
         cache_enabled=cache_enabled
     )
-    return HuggingFaceEmbedder(config)
+    
+    if provider == "api":
+        return APIEmbedder(config)
+    else:
+        return HuggingFaceEmbedder(config)
