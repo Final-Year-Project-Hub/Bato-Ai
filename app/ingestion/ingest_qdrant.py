@@ -18,7 +18,7 @@ from qdrant_client.models import Distance, VectorParams, PointStruct
 
 from app.ingestion.loaders import LoaderFactory, LoaderConfig, BaseDocsLoader
 from app.ingestion.chunker import SemanticChunker, ChunkingConfig
-from app.ingestion.embedder import HuggingFaceEmbedder, EmbedderConfig
+from app.ingestion.embedder import HuggingFaceEmbedder, APIEmbedder, EmbedderConfig
 
 logger = logging.getLogger(__name__)
 
@@ -194,7 +194,10 @@ class QdrantIngestor:
         
         # Create embedder
         logger.info("Initializing embedder...")
-        self.embedder = HuggingFaceEmbedder(self.embedder_config)
+        if self.embedder_config.provider == "api":
+            self.embedder = APIEmbedder(self.embedder_config)
+        else:
+            self.embedder = HuggingFaceEmbedder(self.embedder_config)
         
         # Create chunker
         logger.info("Initializing chunker...")
@@ -536,6 +539,7 @@ def ingest_framework_docs(
     docs_path: str,
     collection_name: str,
     embedding_model: str = "BAAI/bge-small-en-v1.5",
+    embedding_provider: str = "local",
     embedding_device: str = "cuda",
     qdrant_url: str = "http://localhost:6333",
     recreate: bool = False,
@@ -584,9 +588,14 @@ def ingest_framework_docs(
         recreate_collection=recreate
     )
     
+    from app.core.config import get_settings
+    settings = get_settings()
+    
     embedder_config = EmbedderConfig(
         model=embedding_model,
-        device=embedding_device
+        provider=embedding_provider,
+        device=embedding_device,
+        api_token=settings.get_hf_token()
     )
     
     chunking_config = ChunkingConfig(

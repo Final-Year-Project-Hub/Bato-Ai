@@ -587,6 +587,12 @@ async def trigger_ingestion(
             detail=f"Unknown framework: {framework}"
         )
     
+    # Failsafe: Force API provider if in production and on CPU
+    embedding_provider = settings.EMBEDDING_PROVIDER
+    if settings.is_production and settings.EMBEDDING_DEVICE == "cpu":
+        if embedding_provider != "api":
+            embedding_provider = "api"
+
     for key, config in targets.items():
         background_tasks.add_task(
             ingest_framework_docs,
@@ -594,6 +600,7 @@ async def trigger_ingestion(
             docs_path=config["path"],
             collection_name=config["collection"],
             embedding_model=settings.EMBEDDING_MODEL,
+            embedding_provider=embedding_provider,
             embedding_device=settings.EMBEDDING_DEVICE,
             qdrant_url=settings.QDRANT_URL,
             recreate=settings.RECREATE_COLLECTION
