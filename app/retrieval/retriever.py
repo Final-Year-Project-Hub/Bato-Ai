@@ -11,7 +11,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import lru_cache
 
-import tiktoken
+from functools import lru_cache
+
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, Range, MatchValue
 from langchain_core.documents import Document
@@ -41,29 +42,16 @@ class RetrievalConfig:
 
 
 class TokenCounter:
-    """Optimized token counter with caching."""
-    
-    _encoding = None
-    _count_cache = {}
-    _cache_size = 10000
-    
-    def __init__(self):
-        if TokenCounter._encoding is None:
-            TokenCounter._encoding = tiktoken.get_encoding("cl100k_base")
-        self.encoding = TokenCounter._encoding
-    
-    @classmethod
-    @lru_cache(maxsize=10000)
-    def count_cached(cls, text: str) -> int:
-        """LRU cached token counting."""
-        try:
-            return len(cls._encoding.encode(text, disallowed_special=()))
-        except Exception:
-            return max(1, len(text) // 4)
+    """
+    Lightweight token counter using heuristic (char_len / 4).
+    Avoids loading heavy tiktoken encodings (saves ~100MB RAM).
+    """
     
     def count(self, text: str) -> int:
-        """Count tokens with fallback."""
-        return self.count_cached(text)
+        """Estimate tokens (approx 4 chars per token)."""
+        if not text:
+            return 0
+        return max(1, len(text) // 4)
 
 
 class RetrievalCache:

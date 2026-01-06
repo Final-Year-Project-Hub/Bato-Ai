@@ -6,7 +6,6 @@ Splits documents intelligently while respecting structure and token budgets.
 
 import logging
 import re
-import tiktoken
 from typing import Optional, List, Tuple, Dict
 from dataclasses import dataclass
 
@@ -69,7 +68,7 @@ class TokenCounter:
     with caching for performance.
     """
     
-    _encoding_cache: Dict[str, tiktoken.Encoding] = {}
+    _encoding_cache: Dict[str, Any] = {}
     
     def __init__(self, encoding_name: str = "cl100k_base"):
         """
@@ -81,21 +80,20 @@ class TokenCounter:
         self.encoding_name = encoding_name
         self.encoding = self._get_encoding()
     
-    def _get_encoding(self) -> tiktoken.Encoding:
+    def _get_encoding(self) -> Any:
         """Get or create cached encoding."""
         if self.encoding_name in self._encoding_cache:
             return self._encoding_cache[self.encoding_name]
         
         try:
+            import tiktoken
             encoding = tiktoken.get_encoding(self.encoding_name)
             self._encoding_cache[self.encoding_name] = encoding
             return encoding
         except Exception as e:
             logger.warning(f"Failed to load encoding {self.encoding_name}: {e}")
-            # Fallback to cl100k_base
-            encoding = tiktoken.get_encoding("cl100k_base")
-            self._encoding_cache[self.encoding_name] = encoding
-            return encoding
+            # Fallback will be handled in count()
+            return None
     
     def count(self, text: str) -> int:
         """
@@ -110,12 +108,15 @@ class TokenCounter:
         if not text or not isinstance(text, str):
             return 0
         
-        try:
-            return len(self.encoding.encode(text, disallowed_special=()))
-        except Exception as e:
-            logger.debug(f"Token counting failed: {e}")
-            # Rough fallback: ~4 chars per token
-            return max(1, len(text) // 4)
+        # Try using encoding if loaded
+        if self.encoding:
+            try:
+                return len(self.encoding.encode(text, disallowed_special=()))
+            except Exception:
+                 pass
+                 
+        # Fallback: ~4 chars per token
+        return max(1, len(text) // 4)
 
 
 class SemanticChunker:
