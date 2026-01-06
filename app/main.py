@@ -293,7 +293,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 if settings.is_production:
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=["*.your-domain.com", "localhost"]
+        allowed_hosts=["*.onrender.com", "localhost", "127.0.0.1"]
     )
 
 # Rate limiting
