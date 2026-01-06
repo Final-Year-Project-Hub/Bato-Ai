@@ -1,5 +1,5 @@
 """
-Simplified LLM wrapper for Hugging Face and OpenRouter.
+Simplified LLM wrapper for Hugging Face Inference API.
 Removed redundant circuit breaker and rate limiter (handled by API providers).
 """
 
@@ -16,7 +16,6 @@ from huggingface_hub import AsyncInferenceClient
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AIMessage
 from langchain_core.outputs import ChatResult, ChatGeneration
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field, PrivateAttr
 from app.core.config import settings
 logger = logging.getLogger(__name__)
@@ -25,7 +24,6 @@ logger = logging.getLogger(__name__)
 class LLMProvider(str, Enum):
     """Supported LLM providers."""
     HUGGINGFACE = "huggingface"
-    OPENAI = "openai"
 
 
 @dataclass

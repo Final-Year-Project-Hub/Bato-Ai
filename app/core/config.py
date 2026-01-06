@@ -57,14 +57,13 @@ class Settings(BaseSettings):
     # ========================================================================
     # MULTI-MODEL CONFIGURATION
     # ========================================================================
-    # OpenRouter Configuration
-    OPENROUTER_API_KEY: Optional[SecretStr] = Field(default=None, description="OpenRouter API token")
-    OPENROUTER_BASE_URL: str = Field(default="https://openrouter.ai/api/v1", description="OpenRouter API base URL")
+
 
     # Model Selection (using free models by default)
-    QUERY_ANALYSIS_MODEL: str = Field(default="google/gemini-flash-1.5")
-    GENERATION_MODEL: str = Field(default="meta-llama/llama-3.1-8b-instruct:free")
-    VALIDATION_MODEL: str = Field(default="google/gemini-flash-1.5")
+    QUERY_ANALYSIS_MODEL: str = Field(default="Qwen/Qwen2.5-7B-Instruct")
+    GENERATION_MODEL: str = Field(default="Qwen/Qwen2.5-32B-Instruct")
+    VALIDATION_MODEL: str = Field(default="Qwen/Qwen2.5-32B-Instruct")
+    # GENERATION_MODEL=Qwen/Qwen2.5-7B-Instruct
 
 
     

@@ -10,7 +10,7 @@ pydantic-settings
 # AI & Data
 # ============================================================================
 langchain-core
-langchain-openai
+
 huggingface-hub
 tiktoken
 qdrant-client
