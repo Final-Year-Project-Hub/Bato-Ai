@@ -581,6 +581,9 @@ def ingest_framework_docs(
         docs_root=Path(docs_path)
     )
     
+    from app.core.config import get_settings
+    settings = get_settings()
+    
     # Create configs
     ingest_config = IngestionConfig(
         qdrant_url=qdrant_url,
@@ -589,8 +592,7 @@ def ingest_framework_docs(
         recreate_collection=recreate
     )
     
-    from app.core.config import get_settings
-    settings = get_settings()
+
     
     embedder_config = EmbedderConfig(
         model=embedding_model,
