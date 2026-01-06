@@ -584,6 +584,7 @@ def ingest_framework_docs(
     # Create configs
     ingest_config = IngestionConfig(
         qdrant_url=qdrant_url,
+        qdrant_api_key=settings.get_qdrant_key(),
         collection_name=collection_name,
         recreate_collection=recreate
     )
