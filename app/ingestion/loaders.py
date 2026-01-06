@@ -626,7 +626,14 @@ class LoaderFactory:
         if cls._config_cache:
             return cls._config_cache
         
-        config_file = Path(config_path)
+        # Try absolute path execution relative from project root
+        project_root = Path(__file__).resolve().parents[2]
+        config_file = project_root / config_path
+        
+        if not config_file.exists():
+             # Fallback to CWD just in case
+             config_file = Path(config_path)
+
         if not config_file.exists():
             raise FileNotFoundError(f"Config not found: {config_file}")
         
