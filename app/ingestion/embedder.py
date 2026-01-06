@@ -152,10 +152,16 @@ class APIEmbedder(BaseEmbedder):
                 # Ensure we have flat list of vectors
                 embeddings = data
                 
+                # Check for 1D single vector response (common when input list size is 1)
+                if isinstance(embeddings, list) and len(embeddings) > 0 and isinstance(embeddings[0], float):
+                    embeddings = [embeddings]
+
                 # Validation
                 if isinstance(embeddings, list) and len(embeddings) == len(uncached_texts):
                     if len(embeddings) > 0 and isinstance(embeddings[0], list):
                          pass # Valid
+                    elif len(embeddings) == 0:
+                         pass # Empty
                     else:
                          logger.error(f"Unexpected API response format: {type(embeddings)}")
                          embeddings = [[0.0] * self.embedding_dim] * len(uncached_texts)
