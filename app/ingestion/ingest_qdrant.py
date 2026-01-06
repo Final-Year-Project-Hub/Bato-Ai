@@ -245,7 +245,14 @@ class QdrantIngestor:
                 ),
             )
             
-            logger.info(f"✅ Collection created: {collection_name}")
+            # Create payload index for filtering
+            self.qdrant_client.create_payload_index(
+                collection_name=collection_name,
+                field_name="source",
+                field_schema="keyword"
+            )
+            
+            logger.info(f"✅ Collection created with index: {collection_name}")
             
         except Exception as e:
             logger.error(f"Failed to setup collection: {e}")

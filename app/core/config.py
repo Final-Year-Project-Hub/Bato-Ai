@@ -61,8 +61,8 @@ class Settings(BaseSettings):
 
     # Model Selection (using free models by default)
     QUERY_ANALYSIS_MODEL: str = Field(default="Qwen/Qwen2.5-7B-Instruct")
-    GENERATION_MODEL: str = Field(default="Qwen/Qwen2.5-32B-Instruct")
-    VALIDATION_MODEL: str = Field(default="Qwen/Qwen2.5-32B-Instruct")
+    GENERATION_MODEL: str = Field(default="Qwen/Qwen2.5-7B-Instruct")
+    VALIDATION_MODEL: str = Field(default="Qwen/Qwen2.5-7B-Instruct")
     # GENERATION_MODEL=Qwen/Qwen2.5-7B-Instruct
 
 
