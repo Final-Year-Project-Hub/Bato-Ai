@@ -21,7 +21,7 @@ from qdrant_client import QdrantClient
 
 from app.core.config import get_settings
 from app.core.multi_llm import MultiModelLLMManager, MultiModelConfig
-from app.ingestion.embedder import HuggingFaceEmbedder, EmbedderConfig
+from app.ingestion.embedder import BaseEmbedder
 from app.ingestion.ingest_qdrant import ingest_framework_docs
 from app.retrieval.query_analyzer import QueryAnalyzer
 from app.retrieval.retriever import QdrantRetriever, RetrievalConfig
@@ -73,9 +73,10 @@ class AppState:
     
     def __init__(self):
         self.qdrant_client: Optional[QdrantClient] = None
-        self.embedder: Optional[HuggingFaceEmbedder] = None
+        self.embedder: Optional[BaseEmbedder] = None
         self.retriever: Optional[QdrantRetriever] = None
         self.analyzer: Optional[QueryAnalyzer] = None
+
         self.roadmap_service: Optional[RoadmapService] = None
         self.multi_model_manager: Optional[MultiModelLLMManager] = None
         self.token_planner: Optional[TokenBudgetPlanner] = None
@@ -124,14 +125,14 @@ async def lifespan(app: FastAPI):
         
         # 2. Initialize Embedder
         logger.info("Loading embedder...")
-        embedder_config = EmbedderConfig(
+        # Use factory to support API fallback based on env vars
+        from app.ingestion.embedder import create_embedder
+        state.embedder = create_embedder(
             model=settings.EMBEDDING_MODEL,
             device=settings.EMBEDDING_DEVICE,
-            batch_size=settings.EMBEDDING_BATCH_SIZE,
-            cache_size=settings.EMBEDDING_CACHE_SIZE
+            cache_enabled=True
         )
-        state.embedder = HuggingFaceEmbedder(embedder_config)
-        logger.info(f"✅ Embedder ready: {settings.EMBEDDING_MODEL}")
+        logger.info(f"✅ Embedder ready: {state.embedder.config.model} ({state.embedder.config.provider})")
         
         # 3. Initialize LLMs
         logger.info("Initializing LLM models...")
