@@ -12,12 +12,13 @@ import time
 
 import numpy as np
 import httpx # Lightweight HTTP client
-# Only import heavy libraries if strictly needed
-try:
-    from langchain_huggingface import HuggingFaceEmbeddings
-    TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    TRANSFORMERS_AVAILABLE = False
+
+# Removed top-level import to prevent eager loading of heavy libraries
+# try:
+#     from langchain_huggingface import HuggingFaceEmbeddings
+#     TRANSFORMERS_AVAILABLE = True
+# except ImportError:
+#     TRANSFORMERS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -185,7 +186,10 @@ class HuggingFaceEmbedder(BaseEmbedder):
     def __init__(self, config: EmbedderConfig):
         super().__init__(config)
         
-        if not TRANSFORMERS_AVAILABLE:
+        # Lazy import to avoid loading heavy libraries unless actually used
+        try:
+            from langchain_huggingface import HuggingFaceEmbeddings
+        except ImportError:
             raise ImportError("langchain-huggingface not installed. Use 'api' provider instead.")
 
         try:
