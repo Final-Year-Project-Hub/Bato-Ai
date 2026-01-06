@@ -395,6 +395,12 @@ async def log_requests(request: Request, call_next):
 # Health Endpoints
 # ============================================================================
 
+@app.get("/")
+async def root():
+    """Welcome point."""
+    return {"message": "Welcome to our AI system"}
+
+
 @app.get("/health")
 async def health_check():
     """Basic health check."""
