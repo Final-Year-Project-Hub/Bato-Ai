@@ -6,7 +6,7 @@ Splits documents intelligently while respecting structure and token budgets.
 
 import logging
 import re
-from typing import Optional, List, Tuple, Dict
+from typing import Optional, List, Tuple, Dict, Any
 from dataclasses import dataclass
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
