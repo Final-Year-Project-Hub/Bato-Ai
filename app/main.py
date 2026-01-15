@@ -7,6 +7,7 @@ import logging
 import time
 from contextlib import asynccontextmanager
 from typing import List, Union, Optional
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +21,7 @@ from slowapi.util import get_remote_address
 from qdrant_client import QdrantClient
 
 from app.core.config import get_settings
+from app.core.logging_config import setup_logging
 from app.core.multi_llm import MultiModelLLMManager, MultiModelConfig
 from app.ingestion.embedder import BaseEmbedder
 from app.ingestion.ingest_qdrant import ingest_framework_docs
@@ -31,6 +33,13 @@ from app.services.roadmap_service import RoadmapService
 
 # Get settings
 settings = get_settings()
+
+# Setup centralized logging
+setup_logging(
+    environment=settings.ENV,
+    log_level=settings.LOG_LEVEL,
+    log_dir=Path("logs") if settings.ENV == "production" else None
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -507,7 +516,8 @@ async def chat_roadmap(
         response = await state.roadmap_service.process_chat(
             user_message=body.message,
             conversation_history=body.conversation_history,
-            user_context=user_context_dict  # NEW
+            user_context=user_context_dict,  # NEW
+            strict_mode=body.strict_mode # NEW
         )
         return response
     
@@ -539,15 +549,12 @@ async def chat_stream(
     if not state.roadmap_service:
         raise HTTPException(status_code=503, detail="Service not ready")
         
-    user_context_dict = None
-    if body.user_context:
-        user_context_dict = body.user_context.dict(exclude_none=True)
-        
     return StreamingResponse(
         state.roadmap_service.process_chat_stream(
             user_message=body.message,
             conversation_history=body.conversation_history,
-            user_context=user_context_dict
+            user_context=body.user_context,
+            strict_mode=body.strict_mode
         ),
         media_type="text/event-stream"
     )
@@ -567,7 +574,8 @@ async def generate_roadmap(request: RoadmapRequest):
         roadmap = await state.roadmap_service.generate_roadmap(
             goal=request.goal,
             intent=request.intent,
-            proficiency=request.proficiency
+            proficiency=request.proficiency,
+            strict_mode=request.strict_mode
         )
         return roadmap
     except Exception as e:

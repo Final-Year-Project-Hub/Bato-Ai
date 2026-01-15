@@ -3,13 +3,10 @@ Production roadmap service with comprehensive error handling and observability.
 """
 
 import asyncio
-import hashlib
 import json
 import logging
 import re
-import time
-from typing import List, Optional, Union, Dict, Any
-from datetime import datetime, timedelta
+from typing import List, Optional, Dict, Any, AsyncGenerator, Union
 from langchain_core.messages import SystemMessage
 
 from app.retrieval.token_budget import Intent, Depth, TokenBudgetPlanner
@@ -17,6 +14,10 @@ from app.retrieval.query_analyzer import QueryAnalyzer, ExtractedQuery
 from app.retrieval.retriever import QdrantRetriever
 from app.core.multi_llm import MultiModelLLMManager
 from app.core.constants import get_all_suggestions
+from app.core.config import get_settings
+from app.core.prompt_manager import load_prompt
+from app.core.exceptions import InsufficientDocumentationError, JSONParseError
+from app.core.cache import get_cache
 
 # Qdrant filtering
 from qdrant_client.models import Filter, FieldCondition, MatchValue
@@ -41,76 +42,13 @@ from app.schemas import (
     RoadmapRequest,
     ClarificationRequest,
     ChatRequest,
-    QueryIntent
+    QueryIntent,
+    InsufficientDocumentationError
 )
 
 # Use Roadmap for internal service response as well
 RoadmapResponse = Roadmap
 ClarificationResponse = ClarificationRequest
-
-# ============================================================================
-# Improved Caching
-# ============================================================================
-
-class RoadmapCache:
-    """Simple cache with TTL and size limit."""
-    
-    def __init__(self, ttl_hours: int = 24, max_size: int = 1000):
-        self.cache: Dict[str, tuple[Roadmap, float]] = {}  # (roadmap, timestamp)
-        self.ttl_seconds = ttl_hours * 3600
-        self.max_size = max_size
-        self.hits = 0
-        self.misses = 0
-    
-    @staticmethod
-    def generate_cache_key(
-        goal: str,
-        intent: str,
-        proficiency: str,
-        tech_stack: Optional[List[str]] = None,
-        user_id: Optional[str] = None
-    ) -> str:
-        """Generate deterministic cache key (user-specific)."""
-        parts = [
-            user_id or "anonymous",  # Include user_id to make cache user-specific
-            goal.lower().strip(),
-            intent.lower(),
-            proficiency.lower(),
-            ",".join(sorted(tech_stack or []))
-        ]
-        return hashlib.md5("|".join(parts).encode()).hexdigest()
-    
-    def get(self, cache_key: str) -> Optional[Roadmap]:
-        """Get from cache if not expired."""
-        if cache_key in self.cache:
-            roadmap, timestamp = self.cache[cache_key]
-            if time.time() - timestamp < self.ttl_seconds:
-                self.hits += 1
-                return roadmap
-            else:
-                # Expired
-                del self.cache[cache_key]
-        
-        self.misses += 1
-        return None
-    
-    def set(self, cache_key: str, roadmap: Roadmap) -> None:
-        """Set with size limit (remove oldest if full)."""
-        if len(self.cache) >= self.max_size:
-            # Remove oldest entry
-            oldest_key = min(self.cache.items(), key=lambda x: x[1][1])[0]
-            del self.cache[oldest_key]
-        
-        self.cache[cache_key] = (roadmap, time.time())
-    
-    def get_stats(self) -> Dict[str, Any]:
-        """Get cache statistics."""
-        return {
-            "size": len(self.cache),
-            "hits": self.hits,
-            "misses": self.misses,
-            "hit_rate": self.hits / (self.hits + self.misses) if (self.hits + self.misses) > 0 else 0.0
-        }
 
 
 # ============================================================================
@@ -133,11 +71,11 @@ class RoadmapService:
         self.retriever = retriever
         self.analyzer = analyzer
         self.llm_manager = llm_manager
-        self.token_planner = token_planner or TokenBudgetPlanner()
+        self.token_planner = token_planner
+        self.cache = get_cache()  # Multi-level cache
         self.framework_patterns = framework_patterns or {}
         
-        # Cache
-        self.cache = RoadmapCache(ttl_hours=24, max_size=1000)
+        logger.info("RoadmapService initialized with caching enabled")
         
         # Request deduplication
         self._pending_requests: Dict[str, asyncio.Future] = {}
@@ -158,7 +96,8 @@ class RoadmapService:
         self,
         user_message: str,
         conversation_history: Optional[List[Dict[str, str]]] = None,
-        user_context: Optional[Dict[str, Any]] = None  # NEW
+        user_context: Optional[Dict[str, Any]] = None,  # NEW
+        strict_mode: Optional[bool] = None  # NEW
     ) -> Union[Roadmap, ClarificationRequest]:
         """
         Process chat with optional user context for personalization.
@@ -195,8 +134,33 @@ class RoadmapService:
                     missing_fields=["goal", "intent", "proficiency"]
                 )
             
-            # Analyze query
-            extracted = await self._analyze_query_async(user_message, conversation_history)
+            settings = get_settings()
+            
+            # OPTIMIZATION: Run query analysis and preliminary search in parallel
+            async with timer("parallel_analysis_retrieval"):
+                # Start both operations concurrently
+                analysis_task = self.analyzer.analyze_async(user_message, conversation_history)
+                # Preliminary retrieval with basic query (can be refined later)
+                prelim_retrieval_task = self.retriever.retrieve_async(
+                    query=user_message,
+                    budget=self.token_planner.plan(Intent.LEARN, Depth.BALANCED),
+                    max_candidates=3  # Quick preliminary search
+                )
+                
+                # Wait for both to complete
+                extracted, prelim_docs = await asyncio.gather(
+                    analysis_task,
+                    prelim_retrieval_task,
+                    return_exceptions=True
+                )
+                
+                # Handle potential errors
+                if isinstance(extracted, Exception):
+                    logger.error(f"Query analysis failed: {extracted}")
+                    raise extracted
+                if isinstance(prelim_docs, Exception):
+                    logger.warning(f"Preliminary retrieval failed: {prelim_docs}")
+                    prelim_docs = []
             
             # Check completeness
             if not extracted.is_complete:
@@ -235,7 +199,9 @@ class RoadmapService:
                     proficiency=extracted.proficiency,
                     depth=extracted.depth,
                     tech_stack=extracted.tech_stack,
-                    conversation_history=conversation_history
+
+                    conversation_history=conversation_history,
+                    strict_mode=strict_mode
                 )
                 
                 # Cache
@@ -318,7 +284,8 @@ class RoadmapService:
         tech_stack: Optional[List[str]] = None,
         conversation_history: Optional[List[Dict[str, str]]] = None,
         min_phases: int = 5,
-        max_phases: int = 9
+        max_phases: int = 9,
+        strict_mode: Optional[bool] = None
     ) -> Roadmap:
         """
         Generate a learning roadmap based on user request and documentation.g.
@@ -386,65 +353,69 @@ class RoadmapService:
             filters=search_filter
         )
         
+        # STRICT DOCUMENT MODE: Validate retrieval results
+        settings = get_settings()
+        docs_count = len(retrieved_docs)
+        
+        logger.info(f"Retrieved {docs_count} documents for query: {query[:50]}...")
+        
+        # Check if strict mode is enabled
+        is_strict = strict_mode if strict_mode is not None else settings.STRICT_DOCUMENT_MODE
+        
+        if is_strict:
+            # Zero documents - reject immediately
+            if docs_count == 0:
+                error_msg = (
+                    f"No documentation found for {', '.join(tech_stack or ['the requested topic'])}. "
+                    "Cannot generate roadmap without source material. "
+                    "Please try a different technology or check if documentation is available."
+                )
+                logger.warning(f"Retrieval failed: {error_msg}")
+                raise InsufficientDocumentationError(
+                    error_msg,
+                    tech_stack=tech_stack or [],
+                    docs_found=0,
+                    min_required=settings.MIN_DOCS_REQUIRED
+                )
+            
+            # Below minimum threshold - warn user
+            if docs_count < settings.MIN_DOCS_REQUIRED:
+                logger.warning(
+                    f"Low documentation coverage: {docs_count}/{settings.MIN_DOCS_REQUIRED} docs. "
+                    "Roadmap quality may be reduced."
+                )
+                # Note: We proceed but will add warning to response metadata
+        
+        # Extract sources for transparency
+        sources_used = list(set([
+            doc.metadata.get('file_path', doc.metadata.get('source', 'unknown'))
+            for doc in retrieved_docs
+        ]))
+        
+        # Calculate retrieval confidence based on document count and scores
+        avg_score = sum(doc.metadata.get('score', 0.5) for doc in retrieved_docs) / max(docs_count, 1)
+        retrieval_confidence = min(1.0, (docs_count / settings.MIN_DOCS_REQUIRED) * avg_score)
+        
+        logger.info(
+            f"📊 Retrieval Quality: {docs_count} docs, "
+            f"avg_score={avg_score:.3f}, confidence={retrieval_confidence:.3f}"
+        )
+        
         context_str = "\n".join([d.page_content for d in retrieved_docs])
         
-        # 2. Construct Prompt (High Context, Concise Output)
-        system_prompt = f"""You are an expert technical mentor creating a CONCISE, documentation-based roadmap.
-        
-        Goal: {goal}
-        Intent: {intent_val}
-        Level: {proficiency}
-        Tech Stack: {', '.join(tech_stack or [])}
-        
-        Context from documentation:
-        {context_str[:4500]}
-        
-        Create a DETAILED roadmap in JSON format.
-        
-        CRITICAL RULES:
-        1. Generate {min_phases}-{max_phases} phases
-        2. Descriptions should be specific (1-2 sentences)
-        3. 3-4 topics per phase, 2-3 subtopics per topic
-        4. Focus on practical skills from documentation
-        5. Best practices: Include relevant ones
-        
-        Structure:
-        {{
-            "goal": "{goal}",
-            "intent": "{intent_val}",
-            "proficiency": "{proficiency}",
-            "phases": [
-                {{
-                    "title": "Phase Title",
-                    "description": "Brief phase description (1 sentence)",
-                    "estimated_hours": 10.0,
-                    "topics": [
-                        {{
-                            "title": "Topic",
-                            "description": "Brief topic description (1-2 sentences)",
-                            "estimated_hours": 2.0,
-                            "doc_link": "https://official.docs/url",
-                            "subtopics": [
-                                {{
-                                    "title": "Subtopic",
-                                    "description": "Brief description",
-                                    "estimated_hours": 1.0,
-                                    "doc_link": "https://official.docs/url",
-                                    "best_practices": []
-                                }}
-                            ]
-                        }}
-                    ]
-                }}
-            ],
-            "total_estimated_hours": 0.0,
-            "key_technologies": {json.dumps(tech_stack or [])},
-            "prerequisites": [],
-            "next_steps": []
-        }}
-        
-        CRITICAL: Generate EXACTLY {min_phases} to {max_phases} phases. Do not generate fewer than {min_phases} phases.
-        """
+        # 2. Load and format prompt template
+        system_prompt = load_prompt(
+            "roadmap_generator",
+            GOAL=goal,
+            INTENT=intent_val,
+            PROFICIENCY=proficiency,
+            TECH_STACK=', '.join(tech_stack or []),
+            DOCS_COUNT=docs_count,
+            CONTEXT=context_str[:4500],
+            MIN_PHASES=min_phases,
+            MAX_PHASES=max_phases,
+            KEY_TECHNOLOGIES=json.dumps(tech_stack or [])
+        )
         
         # 3. Generate with LLM
         logger.info("Calling LLM for roadmap generation...")
@@ -562,6 +533,11 @@ class RoadmapService:
             total_hours = sum(p.get('estimated_hours', 0) for p in data.get('phases', []))
             data['total_estimated_hours'] = total_hours
             
+            # Add retrieval metadata for transparency
+            data['docs_retrieved_count'] = docs_count
+            data['retrieval_confidence'] = retrieval_confidence
+            data['sources_used'] = sources_used
+            
             return Roadmap(**data)
                 
         except Exception as e:
@@ -574,7 +550,8 @@ class RoadmapService:
         self,
         user_message: str,
         conversation_history: Optional[List[Dict[str, str]]] = None,
-        user_context: Optional[Dict[str, Any]] = None
+        user_context: Optional[Dict[str, Any]] = None,
+        strict_mode: Optional[bool] = None
     ):
         """
         Process chat with streaming response (Server-Sent Events).
@@ -586,6 +563,13 @@ class RoadmapService:
             
             # Extract user info if provided
             user_id = user_context.get("user_id") if user_context else None
+            user_name = user_context.get("user_name") if user_context else None
+            
+            # Quick greeting check
+            if self._is_greeting(user_message):
+                greeting_msg = f"Hello{' ' + user_name if user_name else ''}! 👋 I'm here to create your learning roadmap. What would you like to learn or build?"
+                yield json.dumps({"event": "token", "data": greeting_msg}) + "\n"
+                return
             
             # Analyze query
             extracted = await self._analyze_query_async(user_message, conversation_history)
@@ -627,6 +611,22 @@ class RoadmapService:
                 max_candidates=5,
                 filters=search_filter
             )
+
+            # Check if strict mode is enabled
+            is_strict = strict_mode if strict_mode is not None else settings.STRICT_DOCUMENT_MODE
+            
+            if is_strict:
+                docs_count = len(retrieved_docs)
+                # Zero documents - reject immediately
+                if docs_count == 0:
+                    error_msg = (
+                        f"No documentation found for {', '.join(extracted.tech_stack or ['the requested topic'])}. "
+                        "Cannot generate roadmap without source material. "
+                        "Please try a different technology or check if documentation is available."
+                    )
+                    logger.warning(f"Retrieval failed (Strict Mode): {error_msg}")
+                    yield json.dumps({"event": "error", "data": error_msg}) + "\n"
+                    return
             
             # 3. Generate Stream
             yield json.dumps({"event": "status", "data": "Generating roadmap..."}) + "\n"
@@ -640,71 +640,40 @@ class RoadmapService:
             intent_val = extracted.intent
             tech_stack = extracted.tech_stack or []
 
-            system_prompt = f"""You are an expert technical mentor creating a CONCISE, documentation-based roadmap.
-            
-            Goal: {extracted.goal}
-            Intent: {intent_val}
-            Level: {proficiency}
-            Tech Stack: {', '.join(tech_stack)}
-            
-            Context from documentation:
-            {context_str[:4500]}
-            
-            Create a DETAILED roadmap in JSON format.
-            
-            CRITICAL RULES:
-            1. Generate {min_phases}-{max_phases} phases
-            2. Descriptions should be specific (1-2 sentences)
-            3. 3-4 topics per phase, 2-3 subtopics per topic
-            4. Focus on practical skills from documentation
-            5. Best practices: Include relevant ones
-            
-            Structure:
-            {{
-                "goal": "{extracted.goal}",
-                "intent": "{intent_val}",
-                "proficiency": "{proficiency}",
-                "phases": [
-                    {{
-                        "title": "Phase Title",
-                        "description": "Brief phase description (1 sentence)",
-                        "estimated_hours": 10.0,
-                        "topics": [
-                            {{
-                                "title": "Topic",
-                                "description": "Brief topic description (1-2 sentences)",
-                                "estimated_hours": 2.0,
-                                "doc_link": "https://official.docs/url",
-                                "subtopics": [
-                                    {{
-                                        "title": "Subtopic",
-                                        "description": "Brief description",
-                                        "estimated_hours": 1.0,
-                                        "doc_link": "https://official.docs/url",
-                                        "best_practices": []
-                                    }}
-                                ]
-                            }}
-                        ]
-                    }}
-                ],
-                "total_estimated_hours": 0.0,
-                "key_technologies": {json.dumps(tech_stack)},
-                "prerequisites": [],
-                "next_steps": []
-            }}
-            
-            CRITICAL: Generate EXACTLY {min_phases} to {max_phases} phases. Do not generate fewer than {min_phases} phases.
-            """
+            system_prompt = load_prompt(
+                "roadmap_generator",
+                GOAL=extracted.goal,
+                INTENT=intent_val,
+                PROFICIENCY=proficiency,
+                TECH_STACK=', '.join(tech_stack),
+                DOCS_COUNT=len(retrieved_docs),
+                CONTEXT=context_str[:4500],
+                MIN_PHASES=min_phases,
+                MAX_PHASES=max_phases,
+                KEY_TECHNOLOGIES=json.dumps(tech_stack)
+            )
             
             generator_llm = self.llm_manager.get_generator_llm()
             
             # Stream the response
+            # Stream the response
             async for chunk in generator_llm.astream([
                 SystemMessage(content=system_prompt)
             ]):
-                if chunk.message.content:
-                    yield json.dumps({"event": "token", "data": chunk.message.content}) + "\n"
+                # logger.info(f"DEBUG CHUNK TYPE: {type(chunk)}")
+                # logger.info(f"DEBUG CHUNK VARS: {vars(chunk) if hasattr(chunk, '__dict__') else 'no dict'}")
+                
+                content = None
+                if hasattr(chunk, 'content'):
+                    content = chunk.content
+                elif hasattr(chunk, 'message') and hasattr(chunk.message, 'content'):
+                    content = chunk.message.content
+                
+                if content:
+                    yield json.dumps({"event": "token", "data": content}) + "\n"
+                else:
+                    logger.warning(f"Empty chunk received: {chunk}")
+                    yield json.dumps({"event": "ping", "data": ""}) + "\n" # Keep alive
                     
         except Exception as e:
             logger.error(f"Streaming error: {e}")

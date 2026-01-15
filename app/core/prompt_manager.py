@@ -7,7 +7,7 @@ Supports variable substitution and hot-reloading.
 
 import logging
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +93,7 @@ class PromptManager:
         except Exception as e:
             raise ValueError(f"Error loading template {name}: {e}")
     
-    def _substitute_variables(self, template: str, variables: Dict[str, any]) -> str:
+    def _substitute_variables(self, template: str, variables: Dict[str, Any]) -> str:
         """
         Substitute variables in template.
         

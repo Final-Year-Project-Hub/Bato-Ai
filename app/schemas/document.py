@@ -90,6 +90,11 @@ class Roadmap(BaseModel):
     next_steps: List[str] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
     
+    # Retrieval metadata for transparency
+    docs_retrieved_count: int = Field(default=0, description="Number of documents retrieved for generation")
+    retrieval_confidence: float = Field(default=0.0, description="Confidence score based on retrieval quality")
+    sources_used: List[str] = Field(default_factory=list, description="List of documentation sources used")
+    
 class Document(BaseModel):
     page_content: str
     metadata: Dict = Field(default_factory=dict)
@@ -99,6 +104,14 @@ class ClarificationRequest(BaseModel):
     message: str
     missing_fields: List[str]
     suggested_values: Optional[Dict[str, List[str]]] = None
+
+class InsufficientDocumentationError(BaseModel):
+    """Error response when insufficient documentation is found."""
+    error_type: str = Field(default="insufficient_documentation")
+    message: str
+    tech_stack: List[str] = Field(default_factory=list)
+    docs_found: int = Field(default=0)
+    min_required: int = Field(default=3)
 
 class ChatRequest(BaseModel):
     """

@@ -53,7 +53,23 @@ class BaseEmbedder:
         raise NotImplementedError
 
     def embed_query(self, text: str) -> List[float]:
-        raise NotImplementedError
+        """Embed a single query text with caching."""
+        cached = self._check_cache(text)
+        if cached:
+            return cached
+        
+        # Cache miss - compute embedding
+        # This calls the subclass's embed_documents, which should handle the actual embedding
+        # and potentially add to cache if not already handled.
+        # For BaseEmbedder, this will raise NotImplementedError, as expected.
+        embeddings = self.embed_documents([text])
+        if embeddings:
+            embedding = embeddings[0]
+            self._add_to_cache(text, embedding) # Ensure it's added if embed_documents didn't
+            return embedding
+        else:
+            # Fallback for empty result
+            return [0.0] * self.embedding_dim
         
     def get_stats(self) -> Dict:
         total = self._stats["hits"] + self._stats["misses"]

@@ -9,20 +9,11 @@ from typing import Optional
 from enum import Enum
 import logging
 
+# Import enums from centralized constants
+from app.core.constants import Intent, Depth
+
 logger = logging.getLogger(__name__)
 
-
-class Intent(str, Enum):
-    """User intent types."""
-    LEARN = "learn"
-    BUILD = "build"
-
-
-class Depth(str, Enum):
-    """Query depth/complexity."""
-    CONCEPTUAL = "conceptual"  # High-level understanding
-    PRACTICAL = "practical"    # Implementation details
-    BALANCED = "balanced"      # Mix of both
 
 
 @dataclass

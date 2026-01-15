@@ -111,7 +111,11 @@ class Settings(BaseSettings):
     # RETRIEVAL SETTINGS
     # ========================================================================
     RETRIEVAL_MAX_CANDIDATES: int = Field(default=50, ge=5, le=200)
-    RETRIEVAL_SCORE_THRESHOLD: float = Field(default=0.0, ge=0.0, le=1.0)
+    RETRIEVAL_SCORE_THRESHOLD: float = Field(default=0.3, ge=0.0, le=1.0)
+    
+    # Document Restriction
+    MIN_DOCS_REQUIRED: int = Field(default=4, ge=0, le=20, description="Minimum documents required for roadmap generation")
+    STRICT_DOCUMENT_MODE: bool = Field(default=True, description="Enforce strict document-only responses")
     
     # ========================================================================
     # TOKEN BUDGET
@@ -129,9 +133,9 @@ class Settings(BaseSettings):
     # ========================================================================
     # API SERVER
     # ========================================================================
-    API_HOST: str = Field(default="127.0.0.1")
-    API_PORT: int = Field(default=8000, ge=1024, le=65535)
-    API_WORKERS: int = Field(default=4, ge=1, le=16)
+    API_HOST: str = Field(default="0.0.0.0", validation_alias="HOST")
+    API_PORT: int = Field(default=8000, ge=1024, le=65535, validation_alias="PORT")
+    API_WORKERS: int = Field(default=4, ge=1, le=16, validation_alias="WEB_CONCURRENCY")
     API_RELOAD: bool = Field(default=False)  # Hot reload in dev
     
     # Rate limiting
