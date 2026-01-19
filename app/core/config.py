@@ -139,7 +139,7 @@ class Settings(BaseSettings):
     API_RELOAD: bool = Field(default=False)  # Hot reload in dev
     
     # Rate limiting
-    RATE_LIMIT_ENABLED: bool = Field(default=True)
+    RATE_LIMIT_ENABLED: bool = Field(default=False)  # Disabled for development
     RATE_LIMIT_REQUESTS: int = Field(default=60, ge=1)
     RATE_LIMIT_WINDOW: int = Field(default=60, ge=1)  # seconds
     

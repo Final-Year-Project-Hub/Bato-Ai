@@ -107,7 +107,7 @@ yarn-error.log*
 # Project Specific
 # ============================================================================
 # Frontend & Backend
-frontend/
+# frontend/
 backend/
 tests/
 # Qdrant storage
