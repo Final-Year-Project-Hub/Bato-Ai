@@ -58,13 +58,13 @@ Return ONLY valid JSON (no markdown blocks, no explanations):
                     "title": "Topic Title",
                     "description": "Brief topic description (1-2 sentences)",
                     "estimated_hours": 4.0,
-                    "doc_link": "",
+                    "doc_link": "https://...",  // URL from document header, or "" if none found
                     "subtopics": [
                         {
                             "title": "Subtopic Title",
                             "description": "Brief subtopic description explaining what it is (1-2 sentences)",
                             "estimated_hours": 2.0,
-                            "doc_link": "",
+                            "doc_link": "https://...",  // URL from document header, or "" if none found
                             "best_practices": [
                                 "Use specific practice from docs",
                                 "Follow documented pattern"

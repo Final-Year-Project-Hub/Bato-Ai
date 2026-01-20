@@ -92,6 +92,29 @@ class RoadmapService:
         
         logger.info("✅ RoadmapService initialized")
     
+    def _build_context_with_urls(self, retrieved_docs: List[Document]) -> str:
+        """
+        Build context string with URLs for LLM.
+        
+        Formats each document with metadata headers so the LLM can extract URLs.
+        """
+        context_parts = []
+        for i, doc in enumerate(retrieved_docs, 1):
+            url = doc.metadata.get('url', '')
+            source = doc.metadata.get('source', 'unknown')
+            file_path = doc.metadata.get('file_path', '')
+            
+            # Build structured context with metadata
+            context_parts.append(
+                f"## Document {i}\n"
+                f"Source: {source}\n"
+                f"File: {file_path}\n"
+                f"URL: {url}\n\n"
+                f"{doc.page_content}"
+            )
+        
+        return "\n\n---\n\n".join(context_parts)
+    
     async def process_chat(
         self,
         user_message: str,
@@ -401,7 +424,8 @@ class RoadmapService:
             f"avg_score={avg_score:.3f}, confidence={retrieval_confidence:.3f}"
         )
         
-        context_str = "\n".join([d.page_content for d in retrieved_docs])
+        # Build context with URLs for LLM
+        context_str = self._build_context_with_urls(retrieved_docs)
         
         # 2. Load and format prompt template
         system_prompt = load_prompt(
@@ -631,7 +655,8 @@ class RoadmapService:
             # 3. Generate Stream
             yield json.dumps({"event": "status", "data": "Generating roadmap..."}) + "\n"
             
-            context_str = "\\n".join([d.page_content for d in retrieved_docs])
+            # Build context with URLs for LLM
+            context_str = self._build_context_with_urls(retrieved_docs)
             
             # 2. Construct Prompt (High Context, Concise Output) - Matched with generate_roadmap
             min_phases = 5
