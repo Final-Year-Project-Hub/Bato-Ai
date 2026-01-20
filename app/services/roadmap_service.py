@@ -8,6 +8,7 @@ import logging
 import re
 from typing import List, Optional, Dict, Any, AsyncGenerator, Union
 from langchain_core.messages import SystemMessage
+from langchain_core.documents import Document
 
 from app.retrieval.token_budget import Intent, Depth, TokenBudgetPlanner
 from app.retrieval.query_analyzer import QueryAnalyzer, ExtractedQuery
