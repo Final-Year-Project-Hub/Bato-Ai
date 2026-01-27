@@ -1,43 +1,7 @@
 version: "3.8"
 
 services:
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: bato_backend
-    ports:
-      - "8000:8000"
-    volumes:
-      - .:/app
-      - ./qdrant_storage:/app/qdrant_storage
-    environment:
-      - QDRANT_URL=http://qdrant:6333
-      - ENV=production
-    env_file:
-      - .env
-    depends_on:
-      qdrant:
-        condition: service_healthy
-    networks:
-      - bato_network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    deploy:
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: 4G
-        reservations:
-          cpus: "1.0"
-          memory: 2G
-
-  qdrant:
+  bato_qdrant:
     image: qdrant/qdrant:latest
     container_name: bato_qdrant
     ports:
@@ -45,26 +9,20 @@ services:
       - "6334:6334"
     volumes:
       - ./qdrant_storage:/qdrant/storage
-    networks:
-      - bato_network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 2G
-        reservations:
-          cpus: "0.5"
-          memory: 1G
+    networks:
+      - bato-network
+
+  bato_redis:
+    image: redis/redis-stack:latest
+    container_name: bato_redis
+    ports:
+      - "6379:6379"
+      - "8001:8001"
+    restart: unless-stopped
+    networks:
+      - bato-network
 
 networks:
-  bato_network:
+  bato-network:
     driver: bridge
-    driver_opts:
-      com.docker.network.driver.mtu: 1500

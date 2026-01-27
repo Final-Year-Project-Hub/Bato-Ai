@@ -7,6 +7,7 @@ import json
 import logging
 import re
 from typing import List, Optional, Dict, Any, AsyncGenerator, Union
+# Trigger reload for prompt update
 from langchain_core.messages import SystemMessage
 from langchain_core.documents import Document
 
@@ -39,7 +40,7 @@ from app.schemas import (
     Roadmap,
     Phase,
     Topic,
-    Subtopic,
+    TopicDetail,
     RoadmapRequest,
     ClarificationRequest,
     ChatRequest,
@@ -199,6 +200,7 @@ class RoadmapService:
                 extracted.tech_stack,
                 user_id  # Include user_id to make cache user-specific
             )
+            logger.info(f"🔑 Generated cache key: {cache_key}")
             
             # Request deduplication
             if cache_key in self._pending_requests:
@@ -304,15 +306,16 @@ class RoadmapService:
         goal: str,
         intent: Optional[Union[Intent, str]] = None,
         proficiency: str = "beginner",
-        depth: Optional[str] = None,
+        depth: Optional[Union[Depth, str]] = None,
         tech_stack: Optional[List[str]] = None,
         conversation_history: Optional[List[Dict[str, str]]] = None,
-        min_phases: int = 5,
-        max_phases: int = 9,
         strict_mode: Optional[bool] = None
     ) -> Roadmap:
         """
-        Generate a learning roadmap based on user request and documentation.g.
+        Generate a learning roadmap following roadmap.sh structure:
+        - Exactly 7 phases
+        - ~6 topics per phase (5-7 range)
+        - Brief descriptions for overview
         """
         # Convert intent string to Enum if needed
         if isinstance(intent, str):
@@ -370,12 +373,50 @@ class RoadmapService:
                 search_filter = Filter(should=conditions)
                 logger.info(f"Applying Qdrant filter: source in {normalized_stack}")
         
-        retrieved_docs = await self.retriever.retrieve_async(
+        retrieved_docs_candidates = await self.retriever.retrieve_async(
             query=query,
             budget=self.token_planner.plan(Intent(intent_val), Depth.BALANCED),
-            max_candidates=5,
+            max_candidates=30,  # Increase candidates for diversity filtering
             filters=search_filter
         )
+        
+        # Diversity Filtering: Ensure we don't just get 10 chunks from the same URL
+        # Group by source/URL
+        docs_by_source = {}
+        for doc in retrieved_docs_candidates:
+            # Use URL or file_path as unique source identifier
+            source_id = doc.metadata.get('url') or doc.metadata.get('file_path') or doc.metadata.get('source', 'unknown')
+            if source_id not in docs_by_source:
+                docs_by_source[source_id] = []
+            docs_by_source[source_id].append(doc)
+            
+        # Interleave documents from different sources
+        retrieved_docs = []
+        # Max docs to keep for final context
+        target_doc_count = 12 
+        
+        # Round-robin selection
+        while len(retrieved_docs) < target_doc_count and docs_by_source:
+            # Get one doc from each source
+            sources_to_remove = []
+            for source_id, docs in docs_by_source.items():
+                if docs:
+                    doc = docs.pop(0)
+                    retrieved_docs.append(doc)
+                    if len(retrieved_docs) >= target_doc_count:
+                        break
+                else:
+                    sources_to_remove.append(source_id)
+            
+            # Cleanup exhausted sources
+            for source_id in sources_to_remove:
+                del docs_by_source[source_id]
+                
+            # If we've done a full pass and still have space, we continue to next chunks
+        
+        # Fallback: if we didn't get enough unique docs, just fill with whatever we have (re-sort by score if needed, but simple append is fine)
+        if not retrieved_docs and retrieved_docs_candidates:
+             retrieved_docs = retrieved_docs_candidates[:target_doc_count]
         
         # STRICT DOCUMENT MODE: Validate retrieval results
         settings = get_settings()
@@ -437,8 +478,9 @@ class RoadmapService:
             TECH_STACK=', '.join(tech_stack or []),
             DOCS_COUNT=docs_count,
             CONTEXT=context_str[:4500],
-            MIN_PHASES=min_phases,
-            MAX_PHASES=max_phases,
+            MIN_PHASES=7,
+            MAX_PHASES=7,
+            TOPICS_PER_PHASE=6,
             KEY_TECHNOLOGIES=json.dumps(tech_stack or [])
         )
         
@@ -605,7 +647,35 @@ class RoadmapService:
                 yield json.dumps({"event": "token", "data": clarification.message}) + "\\n"
                 return
 
-            # 2. Retrieve (Non-streaming)
+            # 2. Check Cache
+            cache_key = self.cache.generate_cache_key(
+                extracted.goal,
+                extracted.intent,
+                extracted.proficiency,
+                extracted.tech_stack,
+                user_id
+            )
+            logger.info(f"🔑 Streaming cache key: {cache_key}")
+            
+            cached_roadmap = self.cache.get(cache_key)
+            if cached_roadmap:
+                logger.info(f"✅ Cache HIT for streaming request")
+                yield json.dumps({"event": "status", "data": "Found cached roadmap..."}) + "\n"
+                
+                # Stream the cached JSON content
+                # We can stream it in chunks to simulate generation or just send it
+                json_str = json.dumps(cached_roadmap.model_dump() if hasattr(cached_roadmap, 'model_dump') else cached_roadmap)
+                
+                # Split into chunks for smoother UX (simulated streaming)
+                chunk_size = 50
+                for i in range(0, len(json_str), chunk_size):
+                    chunk = json_str[i:i+chunk_size]
+                    yield json.dumps({"event": "token", "data": chunk}) + "\n"
+                    # Tiny sleep to not overwhelm client
+                    await asyncio.sleep(0.01)
+                return
+
+            # 3. Retrieve (Non-streaming)
             yield json.dumps({"event": "status", "data": f"Searching documentation for {extracted.goal}..."}) + "\n"
             
             # Build filters logic (duplicate from generate_roadmap)
@@ -630,12 +700,39 @@ class RoadmapService:
                 if conditions:
                     search_filter = Filter(should=conditions)
 
-            retrieved_docs = await self.retriever.retrieve_async(
+            retrieved_docs_candidates = await self.retriever.retrieve_async(
                 query=f"{extracted.goal} {extracted.intent} {' '.join(extracted.tech_stack or [])}",
                 budget=self.token_planner.plan(Intent(extracted.intent), Depth.BALANCED),
-                max_candidates=5,
+                max_candidates=30, # Increase candidates for diversity
                 filters=search_filter
             )
+
+            # Diversity Filtering (Duplicate logic for stream)
+            docs_by_source = {}
+            for doc in retrieved_docs_candidates:
+                source_id = doc.metadata.get('url') or doc.metadata.get('file_path') or doc.metadata.get('source', 'unknown')
+                if source_id not in docs_by_source:
+                    docs_by_source[source_id] = []
+                docs_by_source[source_id].append(doc)
+                
+            retrieved_docs = []
+            target_doc_count = 12
+            
+            while len(retrieved_docs) < target_doc_count and docs_by_source:
+                sources_to_remove = []
+                for source_id, docs in docs_by_source.items():
+                    if docs:
+                        doc = docs.pop(0)
+                        retrieved_docs.append(doc)
+                        if len(retrieved_docs) >= target_doc_count:
+                            break
+                    else:
+                        sources_to_remove.append(source_id)
+                for source_id in sources_to_remove:
+                    del docs_by_source[source_id]
+            
+            if not retrieved_docs and retrieved_docs_candidates:
+                 retrieved_docs = retrieved_docs_candidates[:target_doc_count]
 
             # Check if strict mode is enabled
             is_strict = strict_mode if strict_mode is not None else settings.STRICT_DOCUMENT_MODE
@@ -660,8 +757,8 @@ class RoadmapService:
             context_str = self._build_context_with_urls(retrieved_docs)
             
             # 2. Construct Prompt (High Context, Concise Output) - Matched with generate_roadmap
-            min_phases = 5
-            max_phases = 9
+            min_phases = 7
+            max_phases = 7
             proficiency = extracted.proficiency
             intent_val = extracted.intent
             tech_stack = extracted.tech_stack or []
@@ -674,8 +771,9 @@ class RoadmapService:
                 TECH_STACK=', '.join(tech_stack),
                 DOCS_COUNT=len(retrieved_docs),
                 CONTEXT=context_str[:4500],
-                MIN_PHASES=min_phases,
-                MAX_PHASES=max_phases,
+                MIN_PHASES=7,
+                MAX_PHASES=7,
+                TOPICS_PER_PHASE=6,
                 KEY_TECHNOLOGIES=json.dumps(tech_stack)
             )
             
@@ -683,12 +781,11 @@ class RoadmapService:
             
             # Stream the response
             # Stream the response
+            # Stream the response and collect for caching
+            full_response = ""
             async for chunk in generator_llm.astream([
                 SystemMessage(content=system_prompt)
             ]):
-                # logger.info(f"DEBUG CHUNK TYPE: {type(chunk)}")
-                # logger.info(f"DEBUG CHUNK VARS: {vars(chunk) if hasattr(chunk, '__dict__') else 'no dict'}")
-                
                 content = None
                 if hasattr(chunk, 'content'):
                     content = chunk.content
@@ -696,14 +793,161 @@ class RoadmapService:
                     content = chunk.message.content
                 
                 if content:
+                    full_response += content
                     yield json.dumps({"event": "token", "data": content}) + "\n"
                 else:
                     logger.warning(f"Empty chunk received: {chunk}")
                     yield json.dumps({"event": "ping", "data": ""}) + "\n" # Keep alive
+            
+            # 4. Cache the result (Background)
+            try:
+                roadmap_data = self._parse_implied_roadmap(full_response)
+                
+                # Add metadata
+                roadmap_data.docs_retrieved_count = len(retrieved_docs)
+                roadmap_data.retrieval_confidence = self._calculate_confidence(len(retrieved_docs))
+                # Add source info
+                
+                self.cache.set(cache_key, roadmap_data)
+                logger.info(f"💾 Cached streaming result")
+            except Exception as e:
+                logger.error(f"Failed to cache streaming result: {e}")
                     
         except Exception as e:
             logger.error(f"Streaming error: {e}")
             yield json.dumps({"event": "error", "data": str(e)}) + "\n"
+
+    def _calculate_confidence(self, docs_count: int) -> float:
+        settings = get_settings()
+        return min(1.0, docs_count / settings.MIN_DOCS_REQUIRED)
+
+    def _parse_implied_roadmap(self, json_text: str) -> Roadmap:
+        """Helper to parse JSON text into Roadmap object using existing logic."""
+        # Reuse the logic from generate_roadmap - extracted for DRY
+        # This is a simplified version of the detailed parsing in generate_roadmap
+        #Ideally refactor generate_roadmap to use this too, but for now copying the robust parsing logic
+        
+        try:
+             # Extract JSON from response
+            json_str = json_text.strip()
+            
+            if json_str.startswith("```json"):
+                json_str = json_str[7:].lstrip()
+            elif json_str.startswith("```"):
+                json_str = json_str[3:].lstrip()
+            if json_str.endswith("```"):
+                json_str = json_str[:-3].rstrip()
+            
+            json_str = json_str.strip()
+            if not json_str.startswith('{'):
+                start = json_str.find('{')
+                if start >= 0:
+                    json_str = json_str[start:]
+            
+            # Simple cleanup for trailing commas
+            json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
+            
+            data = json.loads(json_str)
+            return Roadmap(**data)
+        except Exception as e:
+            # If simple parse fails, use the robust parsing from generate_roadmap (or just fail for cache)
+            # For this quick fix, we'll just log and fail the cache save if it's malformed
+            raise ValueError(f"JSON parse failed for cache: {e}")
+
+
+    async def get_topic_detail(
+        self,
+        goal: str,
+        phase_number: int,
+        phase_title: str,
+        topic_title: str
+    ) -> TopicDetail:
+        """
+        Generate detailed "deep-dive" content for a specific topic.
+        Uses retrieval to provide accurate context and code examples.
+        """
+        cache_key = f"topic:{goal}:{phase_number}:{topic_title}"
+        if cache := self.cache.get(cache_key):
+            try:
+                return TopicDetail(**cache)
+            except Exception:
+                pass
+        
+        # 1. Expand query for better retrieval
+        search_query = f"{topic_title} in {goal} {phase_title} tutorial code examples"
+        
+        # 2. Retrieve context
+        retrieved_docs = await self.retriever.retrieve_async(
+            query=search_query,
+            budget=self.token_planner.plan(Intent.LEARN, Depth.PRACTICAL),
+            max_candidates=7  # More docs for deep dive
+        )
+        
+        context_str = self._build_context_with_urls(retrieved_docs)
+        
+        # 3. Load prompt
+        system_prompt = load_prompt(
+            "topic_detail",
+            GOAL=goal,
+            PHASE_NUMBER=phase_number,
+            PHASE_TITLE=phase_title,
+            TOPIC_TITLE=topic_title,
+            CONTEXT=context_str[:6000]  # Allow more context for details
+        )
+        
+        # 4. Generate with Groq LLM (fast inference for educational content)
+        from app.core.groq_llm import GroqLLM
+        from langchain_core.messages import SystemMessage
+        
+        groq_llm = GroqLLM()
+        response = await groq_llm._agenerate([
+            SystemMessage(content=system_prompt)
+        ])
+        
+        
+        # 5. Parse JSON
+        try:
+            # Extract JSON from Groq response
+            json_str = response.generations[0].message.content
+            
+            
+            # Simple cleanup pattern
+            if "```json" in json_str:
+                json_str = json_str.split("```json")[1].split("```")[0]
+            elif "```" in json_str:
+                json_str = json_str.split("```")[0] # If assumes start
+                # Use regex or simple strip if wrapper exists
+                import re
+                match = re.search(r'\{.*\}', json_str, re.DOTALL)
+                if match:
+                    json_str = match.group(0)
+            
+            data = json.loads(json_str.strip())
+            
+            # Validate and create object
+            topic_detail = TopicDetail(**data)
+            
+            # Cache result
+            self.cache.set(cache_key, topic_detail.model_dump())
+            
+            return topic_detail
+            
+        except Exception as e:
+            logger.error(f"Failed to generate topic detail: {e}")
+            # Fallback to simple object if parsing fails
+            return TopicDetail(
+                title=topic_title,
+                phase_number=phase_number,
+                phase_title=phase_title,
+                overview=f"Failed to generate detailed content. Please try again.",
+                why_important="Technical error during generation.",
+                key_concepts=["Error recovery"],
+                learning_objectives=["Retry generation"],
+                learning_resources=[],
+                practice_exercises=[],
+                estimated_hours=1.0,
+                difficulty_level="beginner"
+            )
 
     def _update_metrics(self, roadmap: Roadmap, generation_time: float) -> None:
         """Update service metrics."""

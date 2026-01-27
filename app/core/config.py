@@ -3,6 +3,7 @@ Production-ready configuration with secrets management and validation.
 Follows 12-factor app principles with environment-based configuration.
 """
 
+import logging
 import os
 import secrets
 from pathlib import Path
@@ -11,6 +12,8 @@ from functools import lru_cache
 
 from pydantic import Field, field_validator, computed_field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -52,17 +55,17 @@ class Settings(BaseSettings):
     # HUGGING FACE / LLM (SECRETS)
     # ========================================================================
     HUGGINGFACE_API_TOKEN: SecretStr = Field(..., description="HF API token (required)")
-    LLM_PROVIDER: str = Field(default="huggingface", pattern="^(huggingface|openai|openrouter)$")
+    LLM_PROVIDER: str = Field(default="huggingface", pattern="^(huggingface|openai)$")
     
     # ========================================================================
     # MULTI-MODEL CONFIGURATION
     # ========================================================================
 
 
-    # Model Selection (using free models by default)
-    QUERY_ANALYSIS_MODEL: str = Field(default="Qwen/Qwen2.5-7B-Instruct")
+    # Model Selection
+    QUERY_ANALYSIS_MODEL: str = Field(default="HuggingFaceTB/SmolLM3-1.7B-Instruct")
     GENERATION_MODEL: str = Field(default="Qwen/Qwen2.5-7B-Instruct")
-    VALIDATION_MODEL: str = Field(default="Meta-Llama-3-8B-Instruct")
+
     # GENERATION_MODEL=Qwen/Qwen2.5-7B-Instruct
 
 
@@ -76,7 +79,31 @@ class Settings(BaseSettings):
     LLM_TIMEOUT: int = Field(default=300, ge=5, le=600)
     LLM_CACHE_ENABLED: bool = Field(default=True)
     LLM_CACHE_SIZE: int = Field(default=1000, ge=0, le=10000)
+
+    # ========================================================================
+    # REDIS CACHE (Required for Production)
+    # ========================================================================
+    REDIS_ENABLED: bool = Field(default=True, description="Enable Redis caching")
+    REDIS_URL: str = Field(default="redis://localhost:6379/0", description="Redis connection URL")
+    REDIS_PASSWORD: Optional[str] = Field(default=None, description="Redis password (if required)")
+    REDIS_DB: int = Field(default=0, ge=0, le=15, description="Redis database number")
+    REDIS_MAX_CONNECTIONS: int = Field(default=50, ge=1, le=200, description="Max connections in pool")
+    REDIS_SOCKET_TIMEOUT: int = Field(default=5, ge=1, le=30, description="Socket timeout in seconds")
+    REDIS_SOCKET_CONNECT_TIMEOUT: int = Field(default=5, ge=1, le=30, description="Connect timeout in seconds")
     
+    # Cache TTLs (in seconds)
+    ROADMAP_CACHE_TTL: int = Field(default=86400, ge=60, description="Roadmap cache TTL (24 hours)")
+    LLM_CACHE_TTL: int = Field(default=604800, ge=60, description="LLM cache TTL (7 days)")
+
+    # ========================================================================
+    # GROQ API (for Topic Deep-Dive)
+    # ========================================================================
+    GROQ_API_KEY: SecretStr = Field(..., description="Groq API key for fast inference")
+    GROQ_MODEL: str = Field(default="llama-3.1-8b-instant", description="Groq model ID")
+    GROQ_MAX_TOKENS: int = Field(default=4096, ge=512, le=8192, description="Max tokens for Groq")
+    GROQ_TEMPERATURE: float = Field(default=0.3, ge=0.0, le=2.0, description="Groq temperature")
+    GROQ_TIMEOUT: int = Field(default=120, ge=10, le=300, description="Groq timeout in seconds")
+
     # ========================================================================
     # QDRANT
     # ========================================================================
@@ -93,10 +120,9 @@ class Settings(BaseSettings):
     # EMBEDDINGS
     # ========================================================================
     EMBEDDING_MODEL: str = Field(default="BAAI/bge-small-en-v1.5")
-    EMBEDDING_PROVIDER: str = Field(default="local", pattern="^(local|api)$")
-    EMBEDDING_DEVICE: str = Field(default="cuda", pattern="^(cuda|cpu|mps)$")
+    EMBEDDING_PROVIDER: str = Field(default="api", pattern="^(local|api)$")
+    EMBEDDING_DEVICE: str = Field(default="cpu", pattern="^(cuda|cpu|mps)$")
     EMBEDDING_BATCH_SIZE: int = Field(default=32, ge=1, le=128)
-    EMBEDDING_CACHE_SIZE: int = Field(default=10000, ge=0, le=100000)
     
     # ========================================================================
     # DOCUMENT CHUNKING
@@ -313,7 +339,9 @@ class Settings(BaseSettings):
     
     def get_redis_url(self) -> Optional[str]:
         """Get Redis URL if enabled."""
-        return self.REDIS_URL if self.REDIS_ENABLED else None
+        if not self.REDIS_ENABLED:
+            return None
+        return self.REDIS_URL
     
     def __repr__(self) -> str:
         """Safe repr without exposing secrets."""
@@ -348,43 +376,6 @@ def get_settings() -> Settings:
 
 # Backward compatibility
 settings = get_settings()
-
-
-# ============================================================================
-# LOGGING CONFIGURATION
-# ============================================================================
-
-def setup_logging() -> None:
-    """
-    Configure structured logging with JSON formatting for production.
-    
-    Features:
-    - JSON logs in production (for log aggregation)
-    - Human-readable logs in development
-    - Request ID injection
-    - Performance tracking
-    """
-    import logging
-    import sys
-    
-    settings = get_settings()
-    
-    # Configure root logger
-    logging.basicConfig(
-        level=getattr(logging, settings.LOG_LEVEL),
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s' if settings.is_development
-        else '{"time":"%(asctime)s","name":"%(name)s","level":"%(levelname)s","msg":"%(message)s"}',
-        handlers=[logging.StreamHandler(sys.stdout)]
-    )
-    
-    # Set library log levels
-    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("httpcore").setLevel(logging.WARNING)
-
-
-# Initialize logging on import
-setup_logging()
 
 
 if __name__ == "__main__":

@@ -1,9 +1,6 @@
 """
 Centralized constants and enums for Bato-AI.
-
-This module provides a single source of truth for all enums and constants
-used throughout the application. Adding new values (e.g., proficiency levels)
-only requires editing this file.
+Simplified for college project - removed unnecessary helpers.
 """
 
 from enum import Enum
@@ -40,35 +37,6 @@ def get_proficiency_descriptions() -> Dict[str, str]:
     }
 
 
-def normalize_proficiency(value: str) -> str:
-    """Map various terms to the 3 core proficiency levels."""
-    value = value.lower().strip()
-    
-    mapping = {
-        # Beginner mappings
-        "novice": ProficiencyLevel.BEGINNER.value,
-        "elementary": ProficiencyLevel.BEGINNER.value,
-        "beginner": ProficiencyLevel.BEGINNER.value,
-        "newbie": ProficiencyLevel.BEGINNER.value,
-        "basic": ProficiencyLevel.BEGINNER.value,
-        
-        # Intermediate mappings
-        "competent": ProficiencyLevel.INTERMEDIATE.value,
-        "proficient": ProficiencyLevel.INTERMEDIATE.value,
-        "intermediate": ProficiencyLevel.INTERMEDIATE.value,
-        "medium": ProficiencyLevel.INTERMEDIATE.value,
-        
-        # Advanced mappings
-        "expert": ProficiencyLevel.ADVANCED.value,
-        "master": ProficiencyLevel.ADVANCED.value,
-        "professional": ProficiencyLevel.ADVANCED.value,
-        "advanced": ProficiencyLevel.ADVANCED.value,
-        "senior": ProficiencyLevel.ADVANCED.value
-    }
-    
-    return mapping.get(value, ProficiencyLevel.BEGINNER.value)
-
-
 # ============================================================================
 # Learning Intent
 # ============================================================================
@@ -77,7 +45,6 @@ class Intent(str, Enum):
     """User's learning intent."""
     LEARN = "learn"
     BUILD = "build"
-    # Easy to add: PRACTICE = "practice", REVIEW = "review"
 
 
 def get_intents() -> List[str]:
@@ -115,6 +82,11 @@ def get_depths() -> List[str]:
     return [depth.value for depth in Depth]
 
 
+# Aliases for consistency
+get_intent_values = get_intents  # Alias for query_analyzer compatibility
+get_depth_values = get_depths    # Alias for query_analyzer compatibility
+
+
 def get_depth_pattern() -> str:
     """Get regex pattern for depth validation."""
     depths = "|".join(get_depths())
@@ -131,57 +103,6 @@ def get_depth_descriptions() -> Dict[str, str]:
 
 
 # ============================================================================
-# Suggestions for UI
-# ============================================================================
-
-def get_all_suggestions() -> Dict[str, List[str]]:
-    """
-    Get all suggestion values for UI dropdowns/autocomplete.
-    
-    Returns:
-        Dict with keys: proficiency, intent, depth
-    """
-    return {
-        "proficiency": get_proficiency_levels(),
-        "intent": get_intents(),
-        "depth": get_depths()
-    }
-
-
-def get_all_descriptions() -> Dict[str, Dict[str, str]]:
-    """
-    Get all descriptions for UI tooltips/help text.
-    
-    Returns:
-        Dict with keys: proficiency, intent, depth
-    """
-    return {
-        "proficiency": get_proficiency_descriptions(),
-        "intent": get_intent_descriptions(),
-        "depth": get_depth_descriptions()
-    }
-
-
-# ============================================================================
-# Validation Helpers
-# ============================================================================
-
-def validate_proficiency(value: str) -> bool:
-    """Check if proficiency value is valid."""
-    return value in get_proficiency_levels()
-
-
-def validate_intent(value: str) -> bool:
-    """Check if intent value is valid."""
-    return value in get_intents()
-
-
-def validate_depth(value: str) -> bool:
-    """Check if depth value is valid."""
-    return value in get_depths()
-
-
-# ============================================================================
 # Default Values
 # ============================================================================
 
@@ -191,31 +112,18 @@ DEFAULT_DEPTH = Depth.BALANCED.value
 
 
 # ============================================================================
-# Example Usage
+# Suggestion Values for Clarification
 # ============================================================================
 
-if __name__ == "__main__":
-    """Demonstrate usage of constants module."""
+def get_all_suggestions() -> Dict[str, List[str]]:
+    """
+    Get all suggestion values for clarification requests.
     
-    print("=== Proficiency Levels ===")
-    for level in ProficiencyLevel:
-        desc = get_proficiency_descriptions()[level.value]
-        print(f"  {level.value}: {desc}")
-    
-    print("\n=== Intents ===")
-    for intent in Intent:
-        desc = get_intent_descriptions()[intent.value]
-        print(f"  {intent.value}: {desc}")
-    
-    print("\n=== Depths ===")
-    for depth in Depth:
-        desc = get_depth_descriptions()[depth.value]
-        print(f"  {depth.value}: {desc}")
-    
-    print("\n=== Validation Patterns ===")
-    print(f"Proficiency: {get_proficiency_pattern()}")
-    print(f"Intent: {get_intent_pattern()}")
-    print(f"Depth: {get_depth_pattern()}")
-    
-    print("\n=== All Suggestions (for UI) ===")
-    print(get_all_suggestions())
+    Returns a dictionary mapping field names to lists of suggested values.
+    Used when the system needs to ask the user for missing information.
+    """
+    return {
+        "proficiency_level": get_proficiency_levels(),
+        "intent": get_intents(),
+        "depth": get_depths(),
+    }

@@ -1,8 +1,21 @@
 """Schemas package."""
 
-from .roadmap import Roadmap, Phase, Topic, Subtopic, BestPractice
-from .requests import RoadmapRequest, ChatRequest, QueryIntent
-from .responses import ClarificationRequest, InsufficientDocumentationError
+from app.schemas.roadmap import (
+    Roadmap,
+    Phase,
+    Topic,
+    TopicDetail,
+    LearningResource,
+    PracticeExercise
+)
+from app.schemas.requests import (
+    RoadmapRequest,
+    ChatRequest,
+    QueryIntent,
+    UserContext,
+    UserPreferences,
+)
+from app.schemas.responses import ClarificationRequest, InsufficientDocumentationError
 
 # Simple Document class (moved from common.py)
 from pydantic import BaseModel, Field
@@ -17,12 +30,15 @@ __all__ = [
     "Roadmap",
     "Phase",
     "Topic",
-    "Subtopic",
-    "BestPractice",
+    "TopicDetail",
+    "LearningResource",
+    "PracticeExercise",
     # Requests
     "RoadmapRequest",
     "ChatRequest",
     "QueryIntent",
+    "UserContext",
+    "UserPreferences",
     # Responses
     "ClarificationRequest",
     "InsufficientDocumentationError",

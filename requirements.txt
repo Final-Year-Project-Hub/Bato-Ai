@@ -39,12 +39,12 @@ aiofiles
 python-dotenv
 tqdm
 httpx
+redis>=5.0.0
 
 # ============================================================================
 # Security & Rate Limiting
 # ============================================================================
-slowapi
-python-multipart
+# Removed for college project simplicity
 
 # ============================================================================
 # Development & Testing

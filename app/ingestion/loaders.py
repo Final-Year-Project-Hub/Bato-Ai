@@ -445,6 +445,30 @@ class NextJsDocsLoader(BaseDocsLoader):
     def get_supported_extensions(self) -> List[str]:
         return ['.mdx', '.md']
     
+    def construct_url(self, file: Path) -> Optional[str]:
+        """
+        Construct Next.js documentation URL from GitHub repo file path.
+        
+        Handles numbered prefixes (01-, 02-) in GitHub repo structure.
+        Maps to actual nextjs.org URL structure.
+        """
+        if not self.base_url:
+            return None
+        
+        relative_path = file.relative_to(self.docs_root)
+        url_path = str(relative_path.with_suffix('')).replace('\\', '/')
+        
+        # Remove numbered prefixes (01-, 02-, etc.)
+        import re
+        url_path = re.sub(r'/\d{2}-', '/', url_path)  # /01-app -> /app
+        url_path = re.sub(r'^\d{2}-', '', url_path)   # 01-app -> app
+        
+        # Remove 'index' from end of path
+        if url_path.endswith('/index'):
+            url_path = url_path[:-6]
+        
+        return f"{self.base_url.rstrip('/')}/{url_path}"
+    
     def preprocess_content(self, text: str) -> str:
         """Remove MDX-specific syntax."""
         # Remove import statements

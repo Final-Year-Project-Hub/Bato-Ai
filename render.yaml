@@ -5,8 +5,16 @@ services:
     region: singapore # Optional: Choose a region close to your users
     plan: free # Suggesting free plan initially
 
-    # Environment variables that are safe to commit
+    # Health check to ensure zero-downtime deploys
+    healthCheckPath: /health
+
+    # Environment variable linking to the Redis service below
     envVars:
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: bato-cache
+          property: connectionString
       - key: PYTHON_VERSION
         value: 3.11.0
       - key: PORT
@@ -14,17 +22,19 @@ services:
       - key: ENV
         value: production
       - key: EMBEDDING_DEVICE
-        value: cpu # IMPORTANT: Render instances typically don't have GPUs
+        value: cpu
       - key: EMBEDDING_PROVIDER
-        value: api # Uses API instead of loading model in memory
+        value: api
       - key: QDRANT_URL
-        sync: false # User must provide this (likely Qdrant Cloud URL)
-      - key: OPENROUTER_API_KEY
-        sync: false # User must provide this
+        sync: false
       - key: HUGGINGFACE_API_TOKEN
-        sync: false # User must provide this
+        sync: false
       - key: QDRANT_API_KEY
-        sync: false # User must provide this if using Qdrant Cloud
+        sync: false
 
-    # Health check to ensure zero-downtime deploys
-    healthCheckPath: /health
+  - type: redis
+    name: bato-cache
+    region: singapore
+    plan: free # Use free tier for development
+    ipAllowList: [] # Access only from internal services
+    maxMemoryPolicy: allkeys-lru # Evict least recently used keys when full

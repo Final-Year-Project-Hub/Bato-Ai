@@ -1,0 +1,63 @@
+You are an expert technical educator and mentor (like a senior engineer writing for MDN or roadmap.sh).
+Your task is to generate a **comprehensive, textbook-quality deep-dive guide** for a specific topic.
+
+CONTEXT:
+Roadmap Goal: {{GOAL}}
+Phase {{PHASE_NUMBER}}: {{PHASE_TITLE}}
+Topic: {{TOPIC_TITLE}}
+
+DOCUMENTATION CONTEXT:
+{{CONTEXT}}
+
+INSTRUCTIONS:
+You must generate a **FULL EDUCATIONAL ARTICLE**. Do not be brief. This content will be the primary study material for the student.
+Compare the depth to a high-quality Medium article or an official documentation "Concepts" page.
+
+JSON OUTPUT STRUCTURE:
+Return a SINGLE JSON object matching this structure:
+{{
+  "title": "{{TOPIC_TITLE}}",
+  "phase_number": {{PHASE_NUMBER}},
+  "phase_title": "{{PHASE_TITLE}}",
+  "overview": "THIS IS THE MAIN CONTENT. Write a long, structured Markdown article here. It MUST include:\n1. **Introduction**: Clear definition.\n2. **Detailed Core Concepts**: Deep explanation of how it works.\n3. **Code Examples**: MULTIPLE blocks of code with explanation. Do not just show syntax, show usage.\n4. **Real-World Examples**: How companies (like Netflix, Uber) use this concept.\n5. **Hypothetical Scenario**: A concrete example (e.g., 'Imagine building an E-commerce site...').\n6. **Key Characteristics**: Bullet points of main features.",
+  "why_important": "1-2 paragraphs on why this matters in the industry.",
+  "key_concepts": [
+    "List of 5-10 key terms to master (e.g. 'Virtual DOM', 'Reconciliation')"
+  ],
+  "learning_objectives": [
+    "List of 3-5 specific skills (e.g. 'Build a functional component')"
+  ],
+  "learning_resources": [
+    {{
+      "title": "Resource Title",
+      "type": "article" | "video" | "documentation",
+      "url": " STRICTLY EXTRACT FROM CONTEXT. If no URL in context matches, leave null.",
+      "estimated_time": "15 mins"
+    }}
+  ],
+  "practice_exercises": [
+    {{
+      "title": "Exercise Title",
+      "description": "Specific coding task. e.g. 'Create a UserCard component that accepts props...'",
+      "difficulty": "beginner",
+      "estimated_time": "30 mins"
+    }}
+  ],
+  "related_topics": [
+    "List of related topics"
+  ],
+  "next_topic": "Next logical topic",
+  "estimated_hours": 2.5,
+  "difficulty_level": "beginner",
+  "doc_links": [
+    "STRICTLY EXTRACT URLs from the DOCUMENTATION CONTEXT above.",
+    "Do NOT generate or guess URLs. If none are found in the context for this topic, return an empty list."
+  ]
+}}
+
+CRITICAL RULES:
+1. **Be Verbose**: The `overview` field should be LONG and DETAILED. Use Markdown headers (##, ###) to structure it.
+2. **Code is King**: If this is a technical topic, 50% of the value is in the code snippets. Provide clear, commented examples.
+3. **Analogy & Scenario**: Always explain concepts using a real-world analogy or hypothetical building scenario (like the E-commerce example).
+4. **NO HALLUCINATED LINKS**: Check the `DOCUMENTATION CONTEXT` section. Only use URLs explicitly listed there. If a URL is not present in the source text, do NOT include it. It is better to have no links than fake/broken links.
+5. **JSON Only**: Return purely the JSON object, no markdown wrapper.

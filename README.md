@@ -118,7 +118,7 @@ curl http://localhost:8000/health
 ### Generate Roadmap (Chat Interface)
 
 ```bash
-curl -X POST http://localhost:8000/api/chat \
+curl -X POST http://localhost:8000/api/v1/chat \
   -H "Content-Type: application/json" \
   -d '{
     "message": "I want to learn React, I am a beginner"
@@ -128,7 +128,7 @@ curl -X POST http://localhost:8000/api/chat \
 ### Direct Roadmap Generation
 
 ```bash
-curl -X POST http://localhost:8000/api/roadmap \
+curl -X POST http://localhost:8000/api/v1/roadmap/generate \
   -H "Content-Type: application/json" \
   -d '{
     "goal": "Learn React",

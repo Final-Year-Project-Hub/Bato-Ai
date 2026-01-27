@@ -1,6 +1,5 @@
 """
-Simplified LLM wrapper for Hugging Face Inference API.
-Removed redundant circuit breaker and rate limiter (handled by API providers).
+Simplified LLM wrapper for Hugging Face Inference API with Redis caching.
 """
 
 import asyncio
@@ -18,6 +17,8 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AI
 from langchain_core.outputs import ChatResult, ChatGeneration
 from pydantic import BaseModel, Field, PrivateAttr
 from app.core.config import settings
+from app.core.redis_cache import get_redis_cache
+
 logger = logging.getLogger(__name__)
 
 
@@ -70,7 +71,7 @@ class BatoLLM(BaseChatModel):
     """
     
     config: LLMConfig = Field(default_factory=LLMConfig)
-    _cache: Dict[str, Any] = PrivateAttr(default_factory=dict)
+    _redis: Any = PrivateAttr()
     _client: Any = PrivateAttr()
     _metrics: Dict[str, int] = PrivateAttr(default_factory=lambda: {
         "requests": 0,
@@ -84,6 +85,14 @@ class BatoLLM(BaseChatModel):
     def __init__(self, config: Optional[LLMConfig] = None, **kwargs):
         config = config or LLMConfig()
         super().__init__(config=config, **kwargs)
+        
+        # Initialize Redis cache
+        try:
+            self._redis = get_redis_cache()
+            logger.info("✅ LLM Redis cache initialized")
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize Redis cache: {e}")
+            raise
         
         # Initialize Hugging Face Inference Client
         self._client = AsyncInferenceClient(
@@ -150,13 +159,17 @@ class BatoLLM(BaseChatModel):
         # Build prompt
         prompt = self._build_prompt(messages)
         
-        # Check cache
-        cache_key = hashlib.md5(str(prompt).encode()).hexdigest()
-        if self.config.enable_caching and cache_key in self._cache:
-            self._metrics["cache_hits"] += 1
-            content = self._cache[cache_key]
-            logger.debug(f"Cache hit for prompt hash {cache_key[:8]}")
-            return ChatResult(generations=[ChatGeneration(message=AIMessage(content=content))])
+        # Check Redis cache
+        cache_key = f"llm:{hashlib.md5(str(prompt).encode()).hexdigest()}"
+        if self.config.enable_caching:
+            try:
+                cached_content = self._redis.get(cache_key)
+                if cached_content:
+                    self._metrics["cache_hits"] += 1
+                    logger.debug(f"✅ Cache hit for prompt hash {cache_key[:12]}")
+                    return ChatResult(generations=[ChatGeneration(message=AIMessage(content=cached_content))])
+            except Exception as e:
+                logger.warning(f"Cache get failed: {e}")
         
         # API call with retry
         async def _api_call():
@@ -183,13 +196,15 @@ class BatoLLM(BaseChatModel):
             # Execute with retry
             content = await self._call_with_retry(_api_call)
             
-            # Cache
+            # Cache in Redis
             if self.config.enable_caching:
-                self._cache[cache_key] = content
-                # Limit cache size
-                if len(self._cache) > self.config.cache_size:
-                    # Remove oldest (first) entry
-                    self._cache.pop(next(iter(self._cache)))
+                try:
+                    from app.core.config import get_settings
+                    ttl = get_settings().LLM_CACHE_TTL
+                    self._redis.set(cache_key, content, ttl=ttl)
+                    logger.debug(f"Cached LLM response with TTL={ttl}s")
+                except Exception as e:
+                    logger.warning(f"Cache set failed: {e}")
             
             # Log metrics
             latency_ms = int((time.time() - start_time) * 1000)
@@ -271,16 +286,27 @@ class BatoLLM(BaseChatModel):
     
     def get_metrics(self) -> Dict[str, Any]:
         """Get metrics."""
+        try:
+            redis_stats = self._redis.get_stats()
+            cache_size = redis_stats.get("total_keys", 0)
+        except:
+            cache_size = 0
+        
         return {
             **self._metrics,
-            "cache_size": len(self._cache),
+            "cache_size": cache_size,
             "cache_hit_rate": (
                 self._metrics["cache_hits"] / self._metrics["requests"]
                 if self._metrics["requests"] > 0 else 0.0
-            )
+            ),
+            "cache_backend": "redis"
         }
     
     def clear_cache(self) -> None:
         """Clear response cache."""
-        self._cache.clear()
-        logger.info("Cache cleared")
+        try:
+            # Clear only LLM keys (prefix: llm:)
+            # Note: This is a simplified version. For production, use SCAN with pattern
+            logger.warning("Clear cache not fully implemented for Redis. Use Redis CLI: FLUSHDB")
+        except Exception as e:
+            logger.error(f"Cache clear failed: {e}")

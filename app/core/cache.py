@@ -1,74 +1,113 @@
 """
-Simple in-memory cache with TTL.
+Redis-backed cache for roadmap responses.
 
-Simplified from multi-level cache - removed Redis complexity.
+Replaces the previous SimpleCache with Redis for production use.
 """
 
 import logging
-import time
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, List
+
+from app.core.redis_cache import get_redis_cache
 
 logger = logging.getLogger(__name__)
 
 
 class SimpleCache:
-    """Simple in-memory cache with TTL and LRU eviction."""
+    """
+    Redis-backed cache wrapper for backward compatibility.
+    
+    This maintains the same interface as the old SimpleCache
+    but uses Redis as the backend.
+    """
     
     def __init__(self, maxsize: int = 1000, default_ttl: int = 86400):
         """
         Initialize cache.
         
         Args:
-            maxsize: Maximum number of cached items
+            maxsize: Not used (Redis handles size management)
             default_ttl: Default TTL in seconds (24 hours)
         """
-        self.cache: Dict[str, tuple[Any, float]] = {}  # {key: (value, expiry)}
-        self.maxsize = maxsize
         self.default_ttl = default_ttl
+        self._redis = get_redis_cache()
         
-        # Metrics
-        self.hits = 0
-        self.misses = 0
+        logger.info("✅ SimpleCache initialized with Redis backend")
     
     def get(self, key: str) -> Optional[Any]:
         """Get value from cache."""
-        if key in self.cache:
-            value, expiry = self.cache[key]
-            if time.time() < expiry:
-                self.hits += 1
-                return value
+        try:
+            val = self._redis.get(key)
+            if val:
+                logger.info(f"✅ Cache HIT for key: {key}")
             else:
-                # Expired
-                del self.cache[key]
-        
-        self.misses += 1
-        return None
+                logger.info(f"❌ Cache MISS for key: {key}")
+            return val
+        except Exception as e:
+            logger.error(f"Cache get error: {e}")
+            return None
     
     def set(self, key: str, value: Any, ttl: Optional[int] = None):
         """Set value in cache."""
-        ttl = ttl or self.default_ttl
-        
-        # LRU eviction if full
-        if len(self.cache) >= self.maxsize:
-            oldest_key = min(self.cache.keys(), key=lambda k: self.cache[k][1])
-            del self.cache[oldest_key]
-        
-        expiry = time.time() + ttl
-        self.cache[key] = (value, expiry)
+        try:
+            ttl = ttl or self.default_ttl
+            # Log size of value for debugging
+            size_info = "unknown size"
+            if isinstance(value, (str, bytes)):
+                size_info = f"{len(value)} bytes"
+            elif isinstance(value, dict):
+                size_info = f"{len(str(value))} chars (approx)"
+            
+            logger.info(f"💾 Caching key: {key} (TTL: {ttl}s, Size: {size_info})")
+            self._redis.set(key, value, ttl=ttl)
+        except Exception as e:
+            logger.error(f"Cache set error: {e}")
     
     def clear(self):
         """Clear all cached items."""
-        self.cache.clear()
-    
+        try:
+            logger.warning("🧹 Clearing entire cache")
+            self._redis.clear()
+        except Exception as e:
+            logger.error(f"Cache clear error: {e}")
+
+    def generate_cache_key(
+        self,
+        goal: str,
+        intent: str,
+        proficiency: str,
+        tech_stack: Optional[List[str]],
+        user_id: Optional[str] = None,
+    ) -> str:
+        """Generate a stable cache key for roadmap requests."""
+        return self._redis.generate_cache_key(
+            goal=goal,
+            intent=intent,
+            proficiency=proficiency,
+            tech_stack=tech_stack,
+            user_id=user_id
+        )
+
     def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
-        total = self.hits + self.misses
-        return {
-            "size": len(self.cache),
-            "hits": self.hits,
-            "misses": self.misses,
-            "hit_rate": self.hits / total if total > 0 else 0,
-        }
+        try:
+            redis_stats = self._redis.get_stats()
+            return {
+                "size": redis_stats.get("total_keys", 0),
+                "hits": redis_stats.get("hits", 0),
+                "misses": redis_stats.get("misses", 0),
+                "hit_rate": redis_stats.get("hit_rate", 0.0),
+                "backend": "redis",
+                "memory_used": redis_stats.get("used_memory_human", "unknown")
+            }
+        except Exception as e:
+            logger.error(f"Cache stats error: {e}")
+            return {
+                "size": 0,
+                "hits": 0,
+                "misses": 0,
+                "hit_rate": 0.0,
+                "error": str(e)
+            }
 
 
 # Global cache instance

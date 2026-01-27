@@ -12,6 +12,7 @@ from typing import Dict, Optional, Any
 logger = logging.getLogger(__name__)
 
 
+# Prompt manager module
 class PromptManager:
     """
     Manages prompt templates with variable substitution.

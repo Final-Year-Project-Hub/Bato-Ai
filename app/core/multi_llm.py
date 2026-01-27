@@ -17,24 +17,19 @@ logger = logging.getLogger(__name__)
 @dataclass
 class MultiModelConfig:
     """Configuration for multi-model setup."""
-    # Query Analysis: Llama 3.1-8B (fast and lightweight extraction)
+    # Query Analysis: Fast model for extracting user intent
     query_analysis_model: str = settings.QUERY_ANALYSIS_MODEL
     query_analysis_temperature: float = 0.1
     query_analysis_max_tokens: int = 1024
     
-    # Roadmap Generation: DeepSeek V3.2
+    # Roadmap Generation: Main model for generating roadmaps
     generation_model: str = settings.GENERATION_MODEL
     generation_temperature: float = 0.2
     generation_max_tokens: int = 3072
     
-    # Validation: Llama 3.1-70B (faster than DeepSeek V3)
-    validation_model: str = settings.VALIDATION_MODEL
-    validation_temperature: float = 0.2
-    validation_max_tokens: int = 2048
-    
     # Common settings
     api_token: str = ""
-    timeout: int = 180  # DeepSeek V3 needs more time for generation
+    timeout: int = 180
 
 
 class MultiModelLLMManager:
@@ -78,17 +73,9 @@ class MultiModelLLMManager:
             purpose="generation"
         )
         
-        self.validator_llm = self._create_llm(
-            model_id=self.config.validation_model,
-            temperature=self.config.validation_temperature,
-            max_tokens=self.config.validation_max_tokens,
-            purpose="validation"
-        )
-        
         logger.info("✅ MultiModelLLMManager initialized")
         logger.info(f"   Query Analysis: {self.config.query_analysis_model}")
         logger.info(f"   Generation: {self.config.generation_model}")
-        logger.info(f"   Validation: {self.config.validation_model}")
     
     def _create_llm(
         self,
@@ -117,24 +104,16 @@ class MultiModelLLMManager:
         return self.query_analyzer_llm
     
     def get_generator_llm(self) -> BatoLLM:
-        """Get LLM for roadmap generation (balanced)."""
+        """Get LLM for roadmap generation."""
         return self.generator_llm
     
-    def get_validator_llm(self) -> BatoLLM:
-        """Get LLM for validation (fast)."""
-        return self.validator_llm
-    
     async def analyze_query(self, prompt: str) -> str:
-        """Analyze query using high-accuracy model."""
+        """Analyze query using query analysis model."""
         return await self.query_analyzer_llm.ainvoke(prompt)
     
     async def generate_roadmap(self, prompt: str) -> str:
-        """Generate roadmap using balanced model."""
+        """Generate roadmap using generation model."""
         return await self.generator_llm.ainvoke(prompt)
-    
-    async def validate_roadmap(self, prompt: str) -> str:
-        """Validate roadmap using fast model."""
-        return await self.validator_llm.ainvoke(prompt)
     
     async def answer(
         self,
@@ -197,9 +176,6 @@ class MultiModelLLMManager:
             },
             "generator": {
                 "model": self.config.generation_model
-            },
-            "validator": {
-                "model": self.config.validation_model
             }
         }
     
