@@ -63,7 +63,7 @@ class Settings(BaseSettings):
 
 
     # Model Selection
-    QUERY_ANALYSIS_MODEL: str = Field(default="HuggingFaceTB/SmolLM3-1.7B-Instruct")
+    QUERY_ANALYSIS_MODEL: str = Field(default="Qwen/Qwen2.5-7B-Instruct")
     GENERATION_MODEL: str = Field(default="Qwen/Qwen2.5-7B-Instruct")
 
     # GENERATION_MODEL=Qwen/Qwen2.5-7B-Instruct
