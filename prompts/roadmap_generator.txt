@@ -133,7 +133,7 @@ Return ONLY valid JSON. No markdown code blocks, no explanations, no extra text.
     "phases": [
         {{
             "phase_number": 1,
-            "title": "Phase 1: Foundation & Environment Setup",
+            "title": "Foundation & Environment Setup",
             "description": "Brief phase description focusing on what the learner will achieve",
             "estimated_hours": 12.0,
             "topics": [
