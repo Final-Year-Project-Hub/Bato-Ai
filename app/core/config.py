@@ -100,7 +100,7 @@ class Settings(BaseSettings):
     # ========================================================================
     GROQ_API_KEY: SecretStr = Field(..., description="Groq API key for fast inference")
     GROQ_MODEL: str = Field(default="llama-3.1-8b-instant", description="Groq model ID")
-    GROQ_MAX_TOKENS: int = Field(default=4096, ge=512, le=8192, description="Max tokens for Groq")
+    GROQ_MAX_TOKENS: int = Field(default=6144, ge=512, le=8192, description="Max tokens for Groq")
     GROQ_TEMPERATURE: float = Field(default=0.3, ge=0.0, le=2.0, description="Groq temperature")
     GROQ_TIMEOUT: int = Field(default=120, ge=10, le=300, description="Groq timeout in seconds")
 
