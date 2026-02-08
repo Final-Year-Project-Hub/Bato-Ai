@@ -1,5 +1,6 @@
 """
 Simplified FastAPI application for college project.
+# Force reload for prompt update
 """
 
 import asyncio

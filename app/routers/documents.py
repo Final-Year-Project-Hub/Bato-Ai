@@ -333,3 +333,47 @@ async def delete_framework(framework_key: str):
     except Exception as e:
         logger.error(f"Delete error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class IngestResponse(BaseModel):
+    chunks_indexed: int
+    message: str
+
+
+@router.post("/ingest", response_model=IngestResponse)
+async def ingest_framework(framework: str):
+    """
+    Trigger ingestion for a specific framework.
+    This endpoint is called by the backend after document registration.
+    """
+    try:
+        logger.info(f"Starting ingestion for framework: {framework}")
+        
+        # Verify framework exists in config
+        config_file = Path("frameworks.yaml")
+        if not config_file.exists():
+            raise HTTPException(status_code=404, detail="Configuration file not found")
+            
+        with open(config_file, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+            
+        if framework not in config.get("frameworks", {}):
+            raise HTTPException(status_code=404, detail=f"Framework '{framework}' not found in configuration")
+            
+        # Trigger ingestion using existing logic
+        # We need to import ingest_framework_docs here to avoid circular imports if possible
+        # or use the one imported at module level
+        from app.ingestion.ingest_qdrant import ingest_framework_docs
+        
+        # Run ingestion synchronously for now to report status back
+        # In production, this might be better as a background task
+        chunks = await ingest_framework_docs(framework)
+        
+        return IngestResponse(
+            chunks_indexed=chunks,
+            message=f"Successfully ingested {chunks} chunks for {framework}"
+        )
+        
+    except Exception as e:
+        logger.error(f"Ingestion error for {framework}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
