@@ -1,0 +1,55 @@
+You are an expert educator creating a quiz to test understanding of a learning topic.
+
+TOPIC INFORMATION:
+Goal: {goal}
+Phase: {phase_title}
+Topic: {topic_title}
+
+TOPIC CONTENT:
+{topic_content}
+
+INSTRUCTIONS:
+Generate a quiz with 5-7 multiple-choice questions that test understanding of the key concepts covered in the topic content above.
+
+REQUIREMENTS:
+1. Questions should be clear, unambiguous, and directly related to the topic content
+2. Each question must have exactly 4 options (A, B, C, D)
+3. Only ONE correct answer per question
+4. Include a mix of difficulty levels: 2 easy, 3 medium, 2 hard questions
+5. Cover different aspects and concepts from the topic
+6. Provide brief, clear explanations for why the correct answer is right
+7. Avoid trick questions - focus on genuine understanding
+8. Make incorrect options plausible but clearly wrong to someone who understood the content
+
+OUTPUT FORMAT (strict JSON):
+{{
+  "questions": [
+    {{
+      "id": 1,
+      "question": "Clear question text here?",
+      "options": {{
+        "A": "First option",
+        "B": "Second option",
+        "C": "Third option",
+        "D": "Fourth option"
+      }},
+      "correctAnswer": "B",
+      "explanation": "Brief explanation of why B is correct and why it matters",
+      "difficulty": "medium",
+      "concept": "Main concept being tested (e.g., 'React Hooks', 'State Management')"
+    }}
+  ],
+  "metadata": {{
+    "totalQuestions": 5,
+    "estimatedTime": "8-10 minutes",
+    "passingScore": 70
+  }}
+}}
+
+IMPORTANT:
+- Return ONLY valid JSON, no additional text
+- Ensure all questions are relevant to the topic content provided
+- Make sure the quiz tests actual understanding, not just memorization
+- Keep explanations concise but informative (1-2 sentences)
+
+Generate the quiz now:

@@ -17,25 +17,25 @@ class Topic(BaseModel):
 
 
 class Phase(BaseModel):
-    """Phase in learning roadmap - contains 6 topics."""
-    phase_number: int = Field(..., ge=1, le=7, description="Phase number (1-7)")
+    """Phase in learning roadmap - flexible topic count based on scope."""
+    phase_number: int = Field(..., ge=1, le=10, description="Phase number (1-10)")
     title: str
     description: str = Field(..., description="Brief phase overview")
     estimated_hours: float
-    topics: List[Topic] = Field(..., min_length=5, max_length=7, description="Should have ~6 topics")
+    topics: List[Topic] = Field(..., min_length=3, max_length=10, description="3-10 topics per phase")
     
     # Checkpoint after phase
     checkpoint_project: Optional[str] = Field(None, description="Project to validate phase completion")
 
 
 class Roadmap(BaseModel):
-    """Learning roadmap following roadmap.sh structure: 7 phases, ~6 topics each."""
+    """Learning roadmap with dynamic structure based on topic scope and documentation coverage."""
     goal: str
     intent: str
     proficiency: str
     
-    # 7 phases with ~6 topics each
-    phases: List[Phase] = Field(..., min_length=7, max_length=7, description="Must have exactly 7 phases")
+    # Dynamic phase count (3-10 phases)
+    phases: List[Phase] = Field(..., min_length=3, max_length=10, description="3-10 phases based on scope")
     
     total_estimated_hours: float
     key_technologies: List[str] = Field(default_factory=list)

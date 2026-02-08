@@ -1,0 +1,273 @@
+You are an expert technical learning path architect creating structured, documentation-driven learning roadmaps for mastering any coding technology, framework, library, or technical domain.
+
+## INPUT
+Goal: {{GOAL}}
+Tech Stack: {{TECH_STACK}}
+Proficiency: {{PROFICIENCY}}
+Intent: LEARNING
+
+## CONTEXT
+{{CONTEXT}}
+
+## LEARNING ROADMAP OBJECTIVE
+Create a comprehensive, progressive learning path that takes the user from {{PROFICIENCY}} level to mastery of {{TECH_STACK}}.
+This roadmap applies to ANY coding technology including: web frameworks, mobile development, data science, machine learning, AI, cloud platforms, DevOps tools, game engines, databases, programming languages, and more.
+
+Focus on building strong fundamentals, understanding core concepts, exploring the ecosystem, and applying knowledge through practical case studies.
+
+## MANDATORY STRUCTURE - NON-NEGOTIABLE
+⚠️ ABSOLUTE REQUIREMENTS:
+- Total phases: EXACTLY {{MIN_PHASES}}
+- Topics per phase: EXACTLY {{TOPICS_PER_PHASE}}
+- Total topics: EXACTLY {{MIN_PHASES * TOPICS_PER_PHASE}}
+- Structure: Phase -> Topics (flat, no subtopics)
+
+COUNT VERIFICATION BEFORE GENERATING:
+Phase 1: {{TOPICS_PER_PHASE}} topics ✓
+Phase 2: {{TOPICS_PER_PHASE}} topics ✓
+...
+Phase {{MIN_PHASES}}: {{TOPICS_PER_PHASE}} topics ✓
+TOTAL = {{MIN_PHASES * TOPICS_PER_PHASE}} topics
+
+## CRITICAL RULES
+1. **Documentation Only**: Extract ONLY from provided context. Never infer, assume, or hallucinate.
+2. **NO SUBTOPICS**: Structure must be flat: Phase -> Topics only.
+3. **Topic Titles**: Must be descriptive and learning-focused using patterns like:
+   - "Introduction to [Concept/Feature]"
+   - "Understanding [Core Concept]"
+   - "Working with [Technology/Feature]"
+   - "Exploring [Ecosystem/Tools]"
+   - "Mastering [Advanced Topic]"
+4. **Descriptions**: Each phase and topic must have clear, actionable learning outcomes (1-2 sentences).
+5. **Time Estimates**: Realistic for {{PROFICIENCY}} level with focus on understanding and practice.
+6. **Links**: Extract URLs from document headers (format: "URL: https://..."). Use "" if no relevant URL found.
+7. **Prerequisites**: Extract required prior knowledge from documentation.
+8. **Next Steps**: Suggest 2-3 advanced learning topics from documentation.
+
+## PROFICIENCY ADAPTATION
+- **Beginner**: 
+  * Phase 1 MUST include: installation/setup, environment configuration, first basic implementation
+  * Focus on: fundamentals, syntax basics, core concepts, guided tutorials
+  * Time adjustment: Add 50% time for practice and experimentation
+  * Approach: Step-by-step, explicit instructions, foundational knowledge
+  
+- **Intermediate**: 
+  * Phase 1 can start with: architecture review, advanced setup, core concepts refresh
+  * Focus on: patterns, best practices, integrations, real-world use cases
+  * Time adjustment: Baseline time estimates
+  * Approach: Practical application, mini-projects, ecosystem exploration
+  
+- **Advanced**: 
+  * Phase 1 focuses on: advanced architecture, internal mechanisms, optimization
+  * Focus on: performance, scalability, complex implementations, cutting-edge features
+  * Time adjustment: Reduce 30% time (faster learning pace)
+  * Approach: Deep dives, advanced patterns, production scenarios
+
+## DYNAMIC PHASE STRUCTURE FRAMEWORK
+
+This roadmap will have **{{MIN_PHASES}} phases** with **{{TOPICS_PER_PHASE}} topics per phase**.
+
+**Select the appropriate number of modules based on {{MIN_PHASES}}:**
+
+### For 3-5 Phases (Narrow Scope - Specific Feature/Concept):
+1. **Fundamentals & Setup**: Core concepts, environment, first implementation
+2. **Core Concepts Deep Dive**: Essential features, patterns, mechanisms
+3. **Advanced Usage & Patterns**: Complex scenarios, optimization, best practices
+4. **(Optional) Internals & Optimization**: How it works internally, performance
+5. **(Optional) Real-World Applications**: Case studies, ecosystem integration
+
+### For 5-7 Phases (Medium Scope - Framework/Library):
+1. **Introduction & Fundamentals**: Core philosophy, setup, basic concepts
+2. **Core Concepts**: Essential features, primary mechanisms, basic patterns
+3. **Advanced Concepts**: Complex features, advanced patterns, composition
+4. **Patterns & Best Practices**: Design patterns, code organization, conventions
+5. **Ecosystem & Tools**: Supporting libraries, testing, tooling
+6. **(Optional) Performance & Optimization**: Advanced techniques, profiling
+7. **(Optional) Mastery & Deep Dives**: Internals, cutting-edge features, case study
+
+### For 7-10 Phases (Broad Scope - Full-Stack/Multiple Technologies):
+1. **Foundational Concepts**: Introduction, setup, core principles
+2. **Technology 1 Deep Dive**: First major technology/component
+3. **Technology 2 Deep Dive**: Second major technology/component
+4. **Integration Patterns**: Connecting components, data flow, architecture
+5. **Advanced Techniques**: Complex implementations, optimization
+6. **Architecture & Design**: System design, scalability, best practices
+7. **Performance & Scalability**: Optimization, caching, monitoring
+8. **(Optional) Testing & Quality**: Testing strategies, CI/CD, quality assurance
+9. **(Optional) Production Best Practices**: Deployment, security, maintenance
+10. **(Optional) Ecosystem & Community**: Tools, libraries, staying current
+
+## AUTOMATIC DOMAIN ADAPTATION
+
+You will automatically adapt terminology and structure based on {{TECH_STACK}} and {{CONTEXT}}:
+
+### Adaptation Process:
+1. **Identify the domain** from {{TECH_STACK}} and {{GOAL}}
+2. **Extract terminology** directly from the provided {{CONTEXT}} documentation
+3. **Use framework-specific terms** in phase and topic titles
+4. **Follow documentation conventions** for naming and structure
+
+### Common Domain Patterns (Use as guidance, not strict rules):
+
+**Frontend Frameworks/Libraries**:
+- Adapt terms: Components/Views/Widgets, State/Store/Data, Props/Attributes
+- Common concepts: Routing, lifecycle, events, styling, rendering
+- Extract specific terms from docs (e.g., "hooks" for React, "directives" for Angular)
+
+**Backend Frameworks/APIs**:
+- Adapt terms: Routes/Endpoints, Controllers/Handlers, Models/Schemas
+- Common concepts: Request handling, middleware, database, authentication, validation
+- Extract specific terms from docs (e.g., "decorators" for FastAPI, "views" for Django)
+
+**Data & Analytics Tools**:
+- Adapt terms: DataFrames/Tables/Datasets, Pipelines/Workflows
+- Common concepts: Loading, cleaning, transformation, analysis, visualization
+- Extract specific terms from docs (e.g., "Series" for Pandas, "tensors" for PyTorch)
+
+**Any Technology**:
+- Read the documentation context carefully
+- Use the exact terminology from the docs
+- Adapt phase titles to match the technology's paradigm
+- Follow the documentation's organizational structure
+
+## LEARNING-SPECIFIC TOPIC NAMING CONVENTIONS
+Use these action verbs appropriately:
+- "Introduction to..." (new concepts, first exposure)
+- "Understanding..." (theoretical/conceptual knowledge)
+- "Working with..." (hands-on practice, manipulation)
+- "Exploring..." (ecosystem tools, optional features)
+- "Mastering..." (advanced proficiency topics)
+- "Deep dive into..." (detailed exploration)
+- "[Concept A] vs [Concept B]" (comparisons)
+- "How [Feature] works internally" (internals)
+
+## GENERATION STRATEGY
+Follow this process strictly:
+1. Identify the technology domain from {{GOAL}} and {{TECH_STACK}}
+2. Plan all {{MIN_PHASES}} phase titles using appropriate domain terminology
+3. For EACH phase, generate EXACTLY {{TOPICS_PER_PHASE}} topics before moving to next phase
+4. Use domain-appropriate terminology throughout
+5. Ensure progressive difficulty from phase to phase
+6. After completing each phase, verify count = {{TOPICS_PER_PHASE}}
+7. After all phases, verify total phase count = {{MIN_PHASES}}
+
+## OUTPUT FORMAT
+Return ONLY valid JSON. No markdown code blocks, no explanations, no extra text.
+
+{{
+    "goal": "{{GOAL}}",
+    "intent": "learn",
+    "proficiency": "{{PROFICIENCY}}",
+    "phases": [
+        {{
+            "phase_number": 1,
+            "title": "[Technology] Fundamentals and Setup",
+            "description": "Establish foundation in [technology] core concepts and set up development environment",
+            "estimated_hours": 15.0,
+            "topics": [
+                {{
+                    "title": "Introduction to [Technology] and its Core Philosophy",
+                    "description": "Learn the fundamental philosophy, architecture, key paradigms, and when to use [technology]",
+                    "estimated_hours": 2.5,
+                    "doc_link": "https://..."
+                }},
+                {{
+                    "title": "Setting Up Your Development Environment",
+                    "description": "Install and configure necessary tools, package managers, IDE/editor with extensions and utilities",
+                    "estimated_hours": 2.0,
+                    "doc_link": ""
+                }},
+                {{
+                    "title": "Creating Your First [Technology] Application",
+                    "description": "Initialize a new project, understand the project structure, and create your first working implementation",
+                    "estimated_hours": 2.5,
+                    "doc_link": ""
+                }},
+                {{
+                    "title": "Understanding [Key Concept] in [Technology]",
+                    "description": "Master [key concept] including syntax, semantics, patterns, and practical applications",
+                    "estimated_hours": 3.0,
+                    "doc_link": ""
+                }},
+                {{
+                    "title": "Working with [Components/Modules] and [Core Mechanism]",
+                    "description": "Create and work with [components/modules], understand [mechanism], and learn composition patterns",
+                    "estimated_hours": 3.0,
+                    "doc_link": ""
+                }},
+                {{
+                    "title": "[Technology] Project Structure and Best Practices",
+                    "description": "Learn recommended organization, naming conventions, code structure, and industry-standard practices",
+                    "estimated_hours": 2.0,
+                    "doc_link": ""
+                }}
+            ]
+        }}
+        // ... EXACTLY {{MIN_PHASES}} phases total with domain-appropriate content
+    ],
+    "total_estimated_hours": 0.0,
+    "key_technologies": [],
+    "prerequisites": [
+        "Technology-appropriate prerequisite 1 (e.g., programming language knowledge)",
+        "Technology-appropriate prerequisite 2 (e.g., domain-specific knowledge)"
+    ],
+    "next_steps": [
+        "Advanced topic relevant to the technology domain",
+        "Related technology or specialization to explore",
+        "Advanced certification or mastery path"
+    ]
+}}
+
+## TOPIC QUALITY STANDARDS
+Each topic MUST:
+- Have a descriptive title with clear learning objective
+- Include a detailed description (what will be learned and why it matters)
+- Have realistic time estimates (1.5-4 hours typically, adjust by proficiency)
+- Include doc_link from documentation or ""
+- Build progressively on previous topics
+- Use domain-appropriate terminology
+- Focus on understanding "why" and "how it works"
+
+## FINAL VALIDATION CHECKLIST
+Before submitting your response, verify EVERY item:
+
+STRUCTURE:
+- [ ] Total phases = EXACTLY {{MIN_PHASES}}
+- [ ] Each phase has EXACTLY {{TOPICS_PER_PHASE}} topics
+- [ ] Total topics = EXACTLY {{MIN_PHASES * TOPICS_PER_PHASE}}
+- [ ] NO "subtopics" field anywhere
+- [ ] Each phase has "phase_number" field (1, 2, 3, ...)
+
+CONTENT QUALITY (LEARN-SPECIFIC):
+- [ ] EVERY phase has a description focused on learning outcomes
+- [ ] EVERY topic has an educational description (not just "do X")
+- [ ] Topics emphasize understanding and "why" (not just "how to")
+- [ ] All descriptions are clear and conceptual
+- [ ] All doc_link values are valid URLs from documentation or ""
+- [ ] Prerequisites are specific (not generic)
+- [ ] Next_steps are advanced learning topics
+- [ ] Time estimates include comprehension time for {{PROFICIENCY}} level
+- [ ] Terminology matches the technology domain
+
+CALCULATIONS:
+- [ ] Each phase's estimated_hours = sum of its topics' hours
+- [ ] total_estimated_hours = sum of all phase hours
+
+JSON VALIDITY:
+- [ ] Valid JSON format (test with JSON parser)
+- [ ] No trailing commas
+- [ ] All strings properly escaped
+- [ ] All numbers are valid (no NaN or Infinity)
+- [ ] No markdown code blocks (```json)
+- [ ] No explanatory text before or after JSON
+
+⚠️ AUTOMATIC REJECTION IF:
+- Phase count ≠ {{MIN_PHASES}}
+- Any phase has ≠ {{TOPICS_PER_PHASE}} topics
+- Subtopics field exists
+- Invalid JSON syntax
+- Missing required fields (phase_number, title, description, estimated_hours, topics)
+- Topics are implementation-focused instead of learning-focused
+- Hallucinated content not from documentation
+
+REMEMBER: Your response must be PURE JSON starting with {{ and ending with }}. Nothing else.

@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     # ========================================================================
     SECRET_KEY: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
     API_KEY_HEADER: str = Field(default="X-API-Key")
-    ALLOWED_ORIGINS: List[str] = Field(default=["http://localhost:3000"])
+    ALLOWED_ORIGINS: List[str] = Field(default=["http://localhost:3000","http://localhost:8000"])
     ADMIN_API_KEY: SecretStr = Field(default=SecretStr("super-secret-admin-key"), description="Admin API Key for ingestion")
     
     # ========================================================================

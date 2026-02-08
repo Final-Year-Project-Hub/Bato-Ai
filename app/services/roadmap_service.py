@@ -20,6 +20,7 @@ from app.core.config import get_settings
 from app.core.prompt_manager import load_prompt
 from app.core.exceptions import InsufficientDocumentationError, JSONParseError
 from app.core.cache import get_cache
+from app.core.roadmap_calculator import RoadmapCalculator
 
 # Qdrant filtering
 from qdrant_client.models import Filter, FieldCondition, MatchValue
@@ -76,6 +77,7 @@ class RoadmapService:
         self.token_planner = token_planner
         self.cache = get_cache()  # Multi-level cache
         self.framework_patterns = framework_patterns or {}
+        self.roadmap_calculator = RoadmapCalculator()  # Dynamic structure calculator
         
         logger.info("RoadmapService initialized with caching enabled")
         
@@ -424,8 +426,57 @@ class RoadmapService:
         
         logger.info(f"Retrieved {docs_count} documents for query: {query[:50]}...")
         
-        # Check if strict mode is enabled
+        # Check if strict mode is enabled (needed for validation logic below)
         is_strict = strict_mode if strict_mode is not None else settings.STRICT_DOCUMENT_MODE
+        
+        # MULTI-TECH STACK VALIDATION
+        # Detect when multiple technologies requested but only partial docs retrieved
+        if tech_stack and len(tech_stack) >= 2:
+            # Analyze which sources are actually present in retrieved docs
+            sources_in_docs = set()
+            for doc in retrieved_docs:
+                source = doc.metadata.get('source', '').lower()
+                sources_in_docs.add(source)
+            
+            # Check how many requested technologies have documentation
+            tech_coverage = []
+            missing_techs = []
+            
+            for tech in tech_stack:
+                tech_normalized = tech.lower().replace('.', '').replace('-', '').replace(' ', '')
+                # Check if this tech appears in any retrieved doc source
+                found = any(tech_normalized in source or source in tech_normalized for source in sources_in_docs)
+                if found:
+                    tech_coverage.append(tech)
+                else:
+                    missing_techs.append(tech)
+            
+            coverage_ratio = len(tech_coverage) / len(tech_stack)
+            
+            # Warn if significant technologies are missing
+            if missing_techs and coverage_ratio < 0.75:
+                logger.warning(
+                    f"⚠️ Incomplete multi-tech coverage: {len(tech_coverage)}/{len(tech_stack)} technologies have docs. "
+                    f"Missing: {', '.join(missing_techs)}"
+                )
+                
+                # If in strict mode and coverage is very low, provide detailed error
+                if is_strict and coverage_ratio < 0.5:
+                    error_msg = (
+                        f"Insufficient documentation for multi-technology request. "
+                        f"Requested: {', '.join(tech_stack)}. "
+                        f"Documentation available for: {', '.join(tech_coverage) if tech_coverage else 'none'}. "
+                        f"Missing documentation for: {', '.join(missing_techs)}. "
+                        f"Cannot generate comprehensive roadmap without documentation for all technologies. "
+                        f"Please ensure documentation is ingested for all requested technologies, or try a different tech stack."
+                    )
+                    logger.error(f"Multi-tech retrieval failed: {error_msg}")
+                    raise InsufficientDocumentationError(
+                        error_msg,
+                        tech_stack=tech_stack,
+                        docs_found=docs_count,
+                        min_required=settings.MIN_DOCS_REQUIRED
+                    )
         
         if is_strict:
             # Zero documents - reject immediately
@@ -466,21 +517,53 @@ class RoadmapService:
             f"avg_score={avg_score:.3f}, confidence={retrieval_confidence:.3f}"
         )
         
+        # NEW: Detect scope and calculate dynamic structure
+        scope = self.roadmap_calculator.detect_scope(
+            goal=goal,
+            tech_stack=tech_stack or [],
+            intent=intent_val
+        )
+        
+        num_phases, topics_per_phase = self.roadmap_calculator.calculate_structure(
+            scope=scope,
+            proficiency=proficiency,
+            docs_retrieved=docs_count,
+            avg_doc_score=avg_score,
+            expected_docs=10  # k parameter from retrieval
+        )
+        
+        logger.info(f"🎯 Detected scope: '{scope}' → {num_phases} phases × {topics_per_phase} topics")
+        
+        # Determine which prompt to use based on intent
+        learn_intents = ["learn", "understand", "study", "master", "explore"]
+        build_intents = ["build", "create", "develop", "make", "implement"]
+        
+        if intent_val.lower() in learn_intents:
+            prompt_name = "roadmap_generator_learn"
+            logger.info("📚 Using LEARN-focused prompt (theory-rich, comprehensive)")
+        elif intent_val.lower() in build_intents:
+            prompt_name = "roadmap_generator_build"
+            logger.info("🔨 Using BUILD-focused prompt (project-driven, practical)")
+        else:
+            # Default to learn for ambiguous cases
+            prompt_name = "roadmap_generator_learn"
+            logger.info("📚 Using LEARN-focused prompt (default)")
+        
         # Build context with URLs for LLM
         context_str = self._build_context_with_urls(retrieved_docs)
         
         # 2. Load and format prompt template
         system_prompt = load_prompt(
-            "roadmap_generator",
+            prompt_name,  # Dynamic: roadmap_generator_learn or roadmap_generator_build
             GOAL=goal,
             INTENT=intent_val,
             PROFICIENCY=proficiency,
             TECH_STACK=', '.join(tech_stack or []),
             DOCS_COUNT=docs_count,
             CONTEXT=context_str[:4500],
-            MIN_PHASES=7,
-            MAX_PHASES=7,
-            TOPICS_PER_PHASE=6,
+            MIN_PHASES=num_phases,  # Dynamic
+            MAX_PHASES=num_phases,  # Dynamic
+            TOPICS_PER_PHASE=topics_per_phase,  # Dynamic
             KEY_TECHNOLOGIES=json.dumps(tech_stack or [])
         )
         
@@ -647,18 +730,18 @@ class RoadmapService:
                 yield json.dumps({"event": "token", "data": clarification.message}) + "\\n"
                 return
 
-            # 2. Check Cache
-            cache_key = self.cache.generate_cache_key(
-                extracted.goal,
-                extracted.intent,
-                extracted.proficiency,
-                extracted.tech_stack,
-                user_id
-            )
-            logger.info(f"🔑 Streaming cache key: {cache_key}")
+            # 2. Check Cache (DISABLED)
+            # cache_key = self.cache.generate_cache_key(
+            #     extracted.goal,
+            #     extracted.intent,
+            #     extracted.proficiency,
+            #     extracted.tech_stack,
+            #     user_id
+            # )
+            # logger.info(f"🔑 Streaming cache key: {cache_key}")
             
-            cached_roadmap = self.cache.get(cache_key)
-            if cached_roadmap:
+            # cached_roadmap = self.cache.get(cache_key)
+            if False:  # cached_roadmap:
                 logger.info(f"✅ Cache HIT for streaming request")
                 yield json.dumps({"event": "status", "data": "Found cached roadmap..."}) + "\n"
                 
@@ -750,30 +833,62 @@ class RoadmapService:
                     yield json.dumps({"event": "error", "data": error_msg}) + "\n"
                     return
             
-            # 3. Generate Stream
+            # 3. Calculate dynamic structure
+            docs_count = len(retrieved_docs)
+            avg_score = sum(doc.metadata.get('score', 0.5) for doc in retrieved_docs) / max(docs_count, 1)
+            
+            scope = self.roadmap_calculator.detect_scope(
+                goal=extracted.goal,
+                tech_stack=extracted.tech_stack or [],
+                intent=extracted.intent
+            )
+            
+            num_phases, topics_per_phase = self.roadmap_calculator.calculate_structure(
+                scope=scope,
+                proficiency=extracted.proficiency,
+                docs_retrieved=docs_count,
+                avg_doc_score=avg_score,
+                expected_docs=10
+            )
+            
+            logger.info(f"🎯 [Stream] Scope: '{scope}' → {num_phases} phases × {topics_per_phase} topics")
+            
+            # Determine which prompt to use based on intent
+            learn_intents = ["learn", "understand", "study", "master", "explore"]
+            build_intents = ["build", "create", "develop", "make", "implement"]
+            
+            if extracted.intent.lower() in learn_intents:
+                prompt_name = "roadmap_generator_learn"
+                logger.info("📚 [Stream] Using LEARN-focused prompt")
+            elif extracted.intent.lower() in build_intents:
+                prompt_name = "roadmap_generator_build"
+                logger.info("🔨 [Stream] Using BUILD-focused prompt")
+            else:
+                prompt_name = "roadmap_generator_learn"
+                logger.info("📚 [Stream] Using LEARN-focused prompt (default)")
+            
+            # 4. Generate Stream
             yield json.dumps({"event": "status", "data": "Generating roadmap..."}) + "\n"
             
             # Build context with URLs for LLM
             context_str = self._build_context_with_urls(retrieved_docs)
             
-            # 2. Construct Prompt (High Context, Concise Output) - Matched with generate_roadmap
-            min_phases = 7
-            max_phases = 7
+            # Construct Prompt with dynamic values
             proficiency = extracted.proficiency
             intent_val = extracted.intent
             tech_stack = extracted.tech_stack or []
 
             system_prompt = load_prompt(
-                "roadmap_generator",
+                prompt_name,  # Dynamic: roadmap_generator_learn or roadmap_generator_build
                 GOAL=extracted.goal,
                 INTENT=intent_val,
                 PROFICIENCY=proficiency,
                 TECH_STACK=', '.join(tech_stack),
-                DOCS_COUNT=len(retrieved_docs),
+                DOCS_COUNT=docs_count,
                 CONTEXT=context_str[:4500],
-                MIN_PHASES=7,
-                MAX_PHASES=7,
-                TOPICS_PER_PHASE=6,
+                MIN_PHASES=num_phases,  # Dynamic
+                MAX_PHASES=num_phases,  # Dynamic
+                TOPICS_PER_PHASE=topics_per_phase,  # Dynamic
                 KEY_TECHNOLOGIES=json.dumps(tech_stack)
             )
             
@@ -866,12 +981,8 @@ class RoadmapService:
         Generate detailed "deep-dive" content for a specific topic.
         Uses retrieval to provide accurate context and code examples.
         """
-        cache_key = f"topic:{goal}:{phase_number}:{topic_title}"
-        if cache := self.cache.get(cache_key):
-            try:
-                return TopicDetail(**cache)
-            except Exception:
-                pass
+        # Note: Redundant Redis caching removed. 
+        # Caching is handled by the Node.js backend using Postgres.
         
         # 1. Expand query for better retrieval
         search_query = f"{topic_title} in {goal} {phase_title} tutorial code examples"
@@ -880,8 +991,19 @@ class RoadmapService:
         retrieved_docs = await self.retriever.retrieve_async(
             query=search_query,
             budget=self.token_planner.plan(Intent.LEARN, Depth.PRACTICAL),
-            max_candidates=7  # More docs for deep dive
+            max_candidates=15  # More docs for comprehensive deep dive
         )
+        
+        # Check Strict Mode
+        settings = get_settings()
+        if settings.STRICT_DOCUMENT_MODE and not retrieved_docs:
+            logger.warning(f"No documentation found for topic: {topic_title} (Strict Mode)")
+            raise InsufficientDocumentationError(
+                f"No documentation found for '{topic_title}'. Cannot generate detailed guide without source material.",
+                tech_stack=[], 
+                docs_found=0,
+                min_required=1
+            )
         
         context_str = self._build_context_with_urls(retrieved_docs)
         
@@ -904,31 +1026,20 @@ class RoadmapService:
             SystemMessage(content=system_prompt)
         ])
         
-        
         # 5. Parse JSON
         try:
             # Extract JSON from Groq response
             json_str = response.generations[0].message.content
             
+            logger.info(f"Raw LLM response (first 200 chars): {json_str[:200]}")
             
-            # Simple cleanup pattern
-            if "```json" in json_str:
-                json_str = json_str.split("```json")[1].split("```")[0]
-            elif "```" in json_str:
-                json_str = json_str.split("```")[0] # If assumes start
-                # Use regex or simple strip if wrapper exists
-                import re
-                match = re.search(r'\{.*\}', json_str, re.DOTALL)
-                if match:
-                    json_str = match.group(0)
+            from app.core.parsers import parse_topic_detail
             
-            data = json.loads(json_str.strip())
+            # Use robust parser
+            data = parse_topic_detail(json_str)
             
             # Validate and create object
             topic_detail = TopicDetail(**data)
-            
-            # Cache result
-            self.cache.set(cache_key, topic_detail.model_dump())
             
             return topic_detail
             
@@ -948,6 +1059,65 @@ class RoadmapService:
                 estimated_hours=1.0,
                 difficulty_level="beginner"
             )
+    
+    async def stream_topic_detail(
+        self,
+        goal: str,
+        phase_number: int,
+        phase_title: str,
+        topic_title: str
+    ):
+        """
+        Stream detailed topic content from LLM.
+        Yields raw chunks of JSON as they are generated.
+        Validation happens on the client/consumer side for streaming.
+        """
+        try:
+            # 1. Expand query for better retrieval
+            search_query = f"{topic_title} in {goal} {phase_title} tutorial code examples"
+            
+            # 2. Retrieve context
+            retrieved_docs = await self.retriever.retrieve_async(
+                query=search_query,
+                budget=self.token_planner.plan(Intent.LEARN, Depth.PRACTICAL),
+                max_candidates=15
+            )
+            
+            # Check Strict Mode
+            settings = get_settings()
+            if settings.STRICT_DOCUMENT_MODE and not retrieved_docs:
+                logger.warning(f"No documentation found for topic: {topic_title} (Strict Mode)")
+                msg = f"No documentation found for '{topic_title}'. Cannot generate detailed guide without source material."
+                # Return raw JSON error since this is a direct stream
+                yield json.dumps({"error": msg})
+                return
+            
+            context_str = self._build_context_with_urls(retrieved_docs)
+            
+            # 3. Load prompt
+            system_prompt = load_prompt(
+                "topic_detail",
+                GOAL=goal,
+                PHASE_NUMBER=phase_number,
+                PHASE_TITLE=phase_title,
+                TOPIC_TITLE=topic_title,
+                CONTEXT=context_str[:6000]
+            )
+            
+            # 4. Stream with Groq LLM
+            from app.core.groq_llm import GroqLLM
+            from langchain_core.messages import SystemMessage
+            
+            groq_llm = GroqLLM()
+            
+            async for chunk in groq_llm.astream([
+                SystemMessage(content=system_prompt)
+            ]):
+                yield chunk.content
+                
+        except Exception as e:
+            logger.error(f"Failed to stream topic detail: {e}")
+            yield f'{{"error": "{str(e)}"}}'
 
     def _update_metrics(self, roadmap: Roadmap, generation_time: float) -> None:
         """Update service metrics."""
@@ -960,6 +1130,147 @@ class RoadmapService:
             alpha * generation_time +
             (1 - alpha) * self._metrics["avg_generation_time_s"]
         )
+    
+    async def generate_quiz(
+        self,
+        goal: str,
+        phase_title: str,
+        topic_title: str,
+        topic_content: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Generate a quiz for a specific topic using Groq LLM.
+        
+        Args:
+            goal: The learning goal (e.g., "Learn React")
+            phase_title: The phase this topic belongs to
+            topic_title: The topic title
+            topic_content: The full topic content dictionary
+            
+        Returns:
+            Quiz data with questions, options, and metadata
+        """
+        logger.info(f"🎯 Generating quiz for: {topic_title} (Phase: {phase_title})")
+        
+        try:
+            # Load quiz generation prompt
+            prompt_template = load_prompt("quiz_generation")
+            
+            # Format topic content as text for the prompt
+            content_text = self._format_topic_content_for_quiz(topic_content)
+            
+            # Generate prompt
+            prompt = prompt_template.format(
+                goal=goal,
+                phase_title=phase_title,
+                topic_title=topic_title,
+                topic_content=content_text
+            )
+            
+            # Use GroqLLM directly for fast generation
+            from app.core.groq_llm import GroqLLM
+            from langchain_core.messages import SystemMessage
+            
+            groq_llm = GroqLLM()
+            
+            # Generate quiz
+            logger.info("Calling Groq LLM for quiz generation...")
+            response = await groq_llm.ainvoke([SystemMessage(content=prompt)])
+            
+            response_text = response.content if hasattr(response, "content") else str(response)
+            logger.info(f"Groq returned {len(response_text)} characters")
+            
+            # Parse JSON response
+            json_str = response_text.strip()
+            
+            # Remove markdown code blocks
+            if json_str.startswith("```json"):
+                json_str = json_str[7:].lstrip()
+            elif json_str.startswith("```"):
+                json_str = json_str[3:].lstrip()
+            
+            if json_str.endswith("```"):
+                json_str = json_str[:-3].rstrip()
+            
+            # Ensure starts with {
+            json_str = json_str.strip()
+            if not json_str.startswith('{'):
+                start = json_str.find('{')
+                if start >= 0:
+                    json_str = json_str[start:]
+            
+            # Parse JSON
+            quiz_data = json.loads(json_str)
+            
+            logger.info(f"✅ Generated quiz with {len(quiz_data.get('questions', []))} questions")
+            
+            return quiz_data
+            
+        except Exception as e:
+            logger.error(f"Quiz generation failed: {e}", exc_info=True)
+            # Return a fallback empty quiz structure
+            return {
+                "questions": [],
+                "metadata": {
+                    "totalQuestions": 0,
+                    "estimatedTime": "0 minutes",
+                    "passingScore": 70,
+                    "error": str(e)
+                }
+            }
+    
+    def _format_topic_content_for_quiz(self, topic_content: Dict[str, Any]) -> str:
+        """
+        Format topic content dictionary into readable text for quiz generation.
+        
+        Args:
+            topic_content: The topic content dictionary
+            
+        Returns:
+            Formatted text representation
+        """
+        parts = []
+        
+        # Add overview if present
+        if "overview" in topic_content:
+            parts.append(f"Overview:\n{topic_content['overview']}\n")
+        
+        # Add key concepts
+        if "key_concepts" in topic_content:
+            parts.append("Key Concepts:")
+            for concept in topic_content["key_concepts"]:
+                if isinstance(concept, dict):
+                    parts.append(f"- {concept.get('title', '')}: {concept.get('description', '')}")
+                else:
+                    parts.append(f"- {concept}")
+            parts.append("")
+        
+        # Add code examples
+        if "code_examples" in topic_content:
+            parts.append("Code Examples:")
+            for example in topic_content["code_examples"]:
+                if isinstance(example, dict):
+                    parts.append(f"\n{example.get('title', 'Example')}:")
+                    parts.append(f"```\n{example.get('code', '')}\n```")
+                    if "explanation" in example:
+                        parts.append(f"Explanation: {example['explanation']}")
+            parts.append("")
+        
+        # Add best practices
+        if "best_practices" in topic_content:
+            parts.append("Best Practices:")
+            for practice in topic_content["best_practices"]:
+                parts.append(f"- {practice}")
+            parts.append("")
+        
+        # Add common pitfalls
+        if "common_pitfalls" in topic_content:
+            parts.append("Common Pitfalls:")
+            for pitfall in topic_content["common_pitfalls"]:
+                parts.append(f"- {pitfall}")
+            parts.append("")
+        
+        return "\n".join(parts)
     
     def get_metrics(self) -> Dict[str, Any]:
         """Get comprehensive service metrics."""

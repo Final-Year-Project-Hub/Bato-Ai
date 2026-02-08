@@ -205,6 +205,76 @@ class RoadmapOutputParser(BaseOutputParser):
         return "roadmap_json"
 
 
+class TopicDetailOutputParser(BaseOutputParser):
+    """
+    Parser for topic deep-dive JSON responses.
+    Handles extra complexity like markdown wrappers and template artifacts.
+    """
+    
+    def parse(self, text: str) -> Dict[str, Any]:
+        """Parse LLM output into topic detail JSON."""
+        return parse_json_robust(text)
+        
+    @property
+    def _type(self) -> str:
+        return "topic_json"
+
+
+def parse_json_robust(json_str: str) -> Dict[str, Any]:
+    """
+    Robust JSON parser with deep repair logic.
+    Used for complex outputs like topic details and roadmaps.
+    """
+    original_str = json_str
+    
+    try:
+        # 1. Strip Markdown Wrappers
+        if json_str.strip().startswith("```"):
+            if "```json" in json_str:
+                json_str = json_str.split("```json")[1].split("```")[0]
+            elif "```" in json_str:
+                json_str = json_str.split("```")[1].split("```")[0]
+        
+        # 2. Extract JSON object using regex
+        match = re.search(r'\{.*\}', json_str, re.DOTALL)
+        if match:
+            json_str = match.group(0)
+        
+        # 3. Clean up whitespace
+        json_str = json_str.strip()
+        
+        # 4. Fix LangChain template artifacts (double curly braces)
+        if json_str.startswith('{{'):
+            json_str = '{' + json_str[2:]
+        if json_str.endswith('}}'):
+            json_str = json_str[:-2] + '}'
+            
+        return json.loads(json_str)
+        
+    except json.JSONDecodeError as e:
+        logger.warning(f"Initial JSON parse failed: {e}. Attempting deep repair...")
+        return _deep_repair(json_str, original_str)
+
+
+def _deep_repair(json_str: str, original_str: str) -> Dict[str, Any]:
+    """Attempt to repair malformed JSON string."""
+    try:
+        # Fix 1: Replace single quotes with double quotes
+        json_str_fixed = json_str.replace("'", '"')
+        
+        # Fix 2: Remove trailing commas
+        json_str_fixed = re.sub(r',(\s*[}\]])', r'\1', json_str_fixed)
+        
+        # Fix 3: Fix unquoted keys
+        json_str_fixed = re.sub(r'([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*:)', r'\1"\2"\3', json_str_fixed)
+        
+        return json.loads(json_str_fixed)
+        
+    except json.JSONDecodeError as final_error:
+        logger.error(f"JSON repair failed. Original snippet: {original_str[:200]}...")
+        raise final_error
+
+
 # Convenience functions
 def create_query_parser(pydantic_object: type[BaseModel]) -> QueryOutputParser:
     """Create a query output parser."""
@@ -215,3 +285,8 @@ def parse_roadmap_json(text: str) -> Dict[str, Any]:
     """Parse roadmap JSON from LLM output."""
     parser = RoadmapOutputParser()
     return parser.parse(text)
+
+
+def parse_topic_detail(text: str) -> Dict[str, Any]:
+    """Parse topic detail JSON from LLM output."""
+    return parse_json_robust(text)

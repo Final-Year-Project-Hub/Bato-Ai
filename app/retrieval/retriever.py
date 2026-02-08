@@ -81,6 +81,11 @@ class QdrantRetriever:
                 query
             )
             
+            # Check for zero vector (indicating embedding failure)
+            if not query_vector or all(v == 0.0 for v in query_vector):
+                logger.error("Embedding generation failed (Zero Vector). Skipping retrieval.")
+                return []
+            
             # Search with optional filters
             target_collection = collection_name or self.collection_name
             

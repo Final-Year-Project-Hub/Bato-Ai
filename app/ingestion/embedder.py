@@ -4,9 +4,9 @@ Simplified to focus on embedding generation only.
 """
 
 import logging
+import time
 from typing import List, Optional
 from dataclasses import dataclass, replace
-
 import numpy as np
 import httpx  # Lightweight HTTP client
 
@@ -25,7 +25,7 @@ class EmbedderConfig:
     
     # Connection pooling for HF API
     max_concurrent_requests: int = 5
-    request_timeout: int = 30
+    request_timeout: int = 30  # Start fast, increase on retry
 
 
 class BaseEmbedder:
@@ -83,11 +83,14 @@ class APIEmbedder(BaseEmbedder):
         logger.info(f"✅ API Embedder initialized: {self.config.model}")
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        """Batch embedding via API."""
+        """Batch embedding via API with Diagnostic Logging (No Retries)."""
         if not texts:
             return []
         
+        start = time.time()
         self._stats["requests"] += len(texts)
+        
+        logger.info(f"🔌 API Request: Embedding {texts} texts via {self.config.model}")
         
         try:
             # HF API has payload limits, might need chunking if huge batch
@@ -97,32 +100,49 @@ class APIEmbedder(BaseEmbedder):
                 json={"inputs": texts, "options": {"wait_for_model": True}},
                 timeout=self.config.request_timeout
             )
+            
+            # Log specific details for debugging
+            if response.status_code != 200:
+                logger.error(f"❌ API Status: {response.status_code}")
+                logger.error(f"❌ API Headers: {dict(response.headers)}")
+                logger.error(f"❌ API Response: {response.text}")
+            
             response.raise_for_status()
             data = response.json()
             
+            # Check for specific HF errors in 200 OK responses
+            if isinstance(data, dict) and "error" in data:
+                logger.error(f"❌ API returned error payload: {data}")
+                raise ValueError(data["error"])
+
             # HF API returns list of lists (vectors) or list of list of lists (if 3D)
-            # Ensure we have flat list of vectors
             embeddings = data
             
-            # Check for 1D single vector response (common when input list size is 1)
+            # Check for 1D single vector response
             if isinstance(embeddings, list) and len(embeddings) > 0 and isinstance(embeddings[0], float):
                 embeddings = [embeddings]
 
             # Validation
             if isinstance(embeddings, list) and len(embeddings) == len(texts):
                 if len(embeddings) > 0 and isinstance(embeddings[0], list):
+                    duration = time.time() - start
+                    logger.info(f"✅ Embedding success: {len(texts)} docs in {duration:.2f}s")
                     return embeddings
                 elif len(embeddings) == 0:
                     return []
-                else:
-                    logger.error(f"Unexpected API response format: {type(embeddings)}")
-                    return [[0.0] * self.embedding_dim] * len(texts)
-            else:
-                logger.error(f"API returned {len(embeddings)} embeddings for {len(texts)} texts")
-                return [[0.0] * self.embedding_dim] * len(texts)
+            
+            logger.error(f"❌ Unexpected API response format: {type(embeddings)}")
+            logger.error(f"❌ Raw Data Sample: {str(data)[:200]}")
+            return [[0.0] * self.embedding_dim] * len(texts)
                     
+        except httpx.TimeoutException:
+            duration = time.time() - start
+            logger.error(f"❌ API Timeout after {duration:.2f}s. Server did not respond in time.")
+            self._stats["errors"] += len(texts)
+            return [[0.0] * self.embedding_dim] * len(texts)
+            
         except Exception as e:
-            logger.error(f"API Batch embedding failed: {e}")
+            logger.error(f"❌ API Call failed: {str(e)}")
             self._stats["errors"] += len(texts)
             return [[0.0] * self.embedding_dim] * len(texts)
 
@@ -218,8 +238,9 @@ def create_embedder(
     
     # Priority: Function Args > Settings
     # Actually for provider, we trust settings unless we want to force
+    # FORCE LOCAL FOR NOW per user request
+    # provider = "local"  # settings.EMBEDDING_PROVIDER
     provider = settings.EMBEDDING_PROVIDER
-    
     config = EmbedderConfig(
         model=model,
         device=device,

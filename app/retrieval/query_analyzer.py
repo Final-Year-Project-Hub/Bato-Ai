@@ -39,6 +39,9 @@ class ExtractedQuery(BaseModel):
     tech_stack: Optional[List[str]] = Field(None, max_length=10)
     confidence: float = Field(0.0, ge=0.0, le=1.0)
     
+    # Scope for dynamic roadmap calculation
+    scope: str = Field(default="medium", pattern="^(narrow|medium|broad)$")
+    
     # Metadata
     extraction_time: datetime = Field(default_factory=datetime.now)
     session_id: Optional[str] = None

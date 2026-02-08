@@ -25,6 +25,7 @@ from app.retrieval.retriever import QdrantRetriever, RetrievalConfig
 from app.retrieval.token_budget import TokenBudgetPlanner
 from app.schemas import RoadmapRequest, Roadmap, ChatRequest, ClarificationRequest, TopicDetail
 from app.services.roadmap_service import RoadmapService
+from app.routers import documents
 
 # Get settings
 settings = get_settings()
@@ -218,13 +219,23 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 # ============================================================================
 
 @app.middleware("http")
+@app.middleware("http")
 async def log_requests(request: Request, call_next):
     """Log all requests with timing."""
     start_time = time.time()
-    response = await call_next(request)
-    duration = (time.time() - start_time) * 1000
-    logger.info(f"{request.method} {request.url.path} - {response.status_code} - {duration:.0f}ms")
-    return response
+    try:
+        response = await call_next(request)
+        duration = (time.time() - start_time) * 1000
+        logger.info(f"{request.method} {request.url.path} - {response.status_code} - {duration:.0f}ms")
+        return response
+    except RuntimeError as e:
+        # Starlette raises RuntimeError("No response returned.") on client disconnect
+        if "No response returned" in str(e):
+            duration = (time.time() - start_time) * 1000
+            logger.warning(f"{request.method} {request.url.path} - Client Disconnected - {duration:.0f}ms")
+            # Return empty response to satisfy ASGI
+            return JSONResponse(status_code=499, content={"detail": "Client Closed Request"})
+        raise e
 
 
 # ============================================================================
@@ -245,6 +256,13 @@ async def health_check():
         "version": "1.0.0",
         "uptime_seconds": time.time() - state.startup_time if state.startup_time else 0
     }
+
+
+# ============================================================================
+# Include Routers
+# ============================================================================
+
+app.include_router(documents.router)
 
 
 # ============================================================================
@@ -359,6 +377,67 @@ async def get_topic_detail(
     
     except Exception as e:
         logger.error(f"Topic detail error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/topic/stream/{phase_number}/{topic_title}")
+async def stream_topic_detail(
+    phase_number: int,
+    topic_title: str,
+    phase_title: str = Query(..., description="Title of the phase this topic belongs to"),
+    goal: str = Query(..., description="Original roadmap goal")
+):
+    """
+    Stream detailed topic content as Server-Sent Events (SSE).
+    """
+    if not state.roadmap_service:
+        raise HTTPException(status_code=503, detail="Service not ready")
+        
+    return StreamingResponse(
+        state.roadmap_service.stream_topic_detail(
+            goal=goal,
+            phase_number=phase_number,
+            phase_title=phase_title,
+            topic_title=topic_title
+        ),
+        media_type="text/event-stream"
+    )
+
+
+@app.post("/api/v1/quiz/generate")
+async def generate_quiz(request: dict):
+    """
+    Generate a quiz for a specific topic.
+    Expects: goal, phase_title, topic_title, topic_content
+    """
+    if not state.roadmap_service:
+        raise HTTPException(status_code=503, detail="Service not ready")
+    
+    try:
+        # Extract required fields
+        goal = request.get("goal")
+        phase_title = request.get("phase_title")
+        topic_title = request.get("topic_title")
+        topic_content = request.get("topic_content")
+        
+        if not all([goal, phase_title, topic_title, topic_content]):
+            raise HTTPException(
+                status_code=400,
+                detail="Missing required fields: goal, phase_title, topic_title, topic_content"
+            )
+        
+        # Generate quiz
+        quiz = await state.roadmap_service.generate_quiz(
+            goal=goal,
+            phase_title=phase_title,
+            topic_title=topic_title,
+            topic_content=topic_content
+        )
+        
+        return quiz
+    
+    except Exception as e:
+        logger.error(f"Quiz generation error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

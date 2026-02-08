@@ -44,75 +44,43 @@ Follow this process strictly:
 
 ## {{MIN_PHASES}}-PHASE LEARNING PROGRESSION FRAMEWORK
 
-**Phase 1: Foundation & Environment Setup**
-Purpose: Get the development environment ready and understand the basic setup
-Focus areas:
-- Development environment configuration
-- Core dependencies and tooling installation
-- Project structure and organization
-- First "Hello World" style implementation
-- Understanding the build/compilation process
-- Basic debugging setup
+This roadmap will have **{{MIN_PHASES}} phases** with **{{TOPICS_PER_PHASE}} topics per phase**.
 
-**Phase 2: Core Concepts & Fundamentals**
-Purpose: Master the essential theoretical knowledge and terminology
-Focus areas:
-- Key terminology and mental models
-- Fundamental syntax and language features
-- Basic data structures and types
-- Core APIs and methods
-- Error handling basics
-- Documentation navigation
+**General Phase Distribution Strategy**:
+- **Early Phases (1-2)**: Foundation, environment setup, and core concepts
+- **Middle Phases**: Practical application, hands-on skills, and integration
+- **Later Phases**: Advanced techniques, optimization, and mastery
 
-**Phase 3: Practical Application & Hands-On Skills**
-Purpose: Build functional components through hands-on practice
-Focus areas:
-- Building basic functional components
-- Common use cases and workflows
-- Working with data and inputs
-- Basic CRUD operations
-- Simple project implementation
-- Code organization patterns
+**Adapt your phase titles and content to fit {{MIN_PHASES}} phases naturally.**
 
-**Phase 4: Intermediate Patterns & Integration**
-Purpose: Learn design patterns and integrate with other tools
-Focus areas:
-- Design patterns and best practices
-- State management techniques
-- Integration with libraries/frameworks
-- API consumption and data fetching
-- Authentication and authorization basics
-- Component composition patterns
+### Phase Structure Guidelines:
 
-**Phase 5: Advanced Techniques & Optimization**
-Purpose: Optimize performance and handle complex scenarios
-Focus areas:
-- Performance optimization strategies
-- Advanced patterns and edge cases
-- Caching and memoization
-- Debugging complex issues
-- Memory management
-- Security best practices
+For **3-4 phases** (Narrow scope):
+1. Setup & Fundamentals
+2. Core Concepts & Practice
+3. Advanced Usage & Best Practices
+4. (Optional) Real-World Application
 
-**Phase 6: Real-World Projects & Production Readiness**
-Purpose: Build complete applications ready for production
-Focus areas:
-- End-to-end project architecture
-- Testing strategies (unit, integration, e2e)
-- Error monitoring and logging
-- Deployment configuration
-- CI/CD pipeline setup
-- Production debugging and monitoring
+For **5-7 phases** (Medium scope):
+1. Foundation & Setup
+2. Core Concepts
+3. Practical Application
+4. Intermediate Patterns
+5. Advanced Techniques
+6. (Optional) Production Readiness
+7. (Optional) Mastery & Ecosystem
 
-**Phase 7: Mastery & Ecosystem Exploration**
-Purpose: Achieve mastery and explore the broader ecosystem
-Focus areas:
-- Advanced architecture patterns
-- Scalability considerations
-- Ecosystem tools and extensions
-- Contributing to open source
-- Staying current with updates
-- Community best practices and resources
+For **8-10 phases** (Broad scope):
+1. Environment Setup
+2. Technology 1 Fundamentals
+3. Technology 2 Fundamentals
+4. Integration Basics
+5. Advanced Patterns
+6. Full-Stack Integration
+7. Testing & Quality
+8. Deployment & DevOps
+9. (Optional) Performance & Scaling
+10. (Optional) Best Practices & Community
 
 ## TOPIC DISTRIBUTION GUIDELINES
 - Each phase must build logically on previous phases
@@ -133,7 +101,7 @@ Return ONLY valid JSON. No markdown code blocks, no explanations, no extra text.
     "phases": [
         {{
             "phase_number": 1,
-            "title": "Phase 1: Foundation & Environment Setup",
+            "title": "Foundation & Environment Setup",
             "description": "Brief phase description focusing on what the learner will achieve",
             "estimated_hours": 12.0,
             "topics": [

@@ -60,4 +60,17 @@ CRITICAL RULES:
 2. **Code is King**: If this is a technical topic, 50% of the value is in the code snippets. Provide clear, commented examples.
 3. **Analogy & Scenario**: Always explain concepts using a real-world analogy or hypothetical building scenario (like the E-commerce example).
 4. **NO HALLUCINATED LINKS**: Check the `DOCUMENTATION CONTEXT` section. Only use URLs explicitly listed there. If a URL is not present in the source text, do NOT include it. It is better to have no links than fake/broken links.
-5. **JSON Only**: Return purely the JSON object, no markdown wrapper.
+5. **JSON ONLY - NO MARKDOWN**: You MUST return ONLY a valid JSON object. Do NOT wrap it in markdown code blocks. Do NOT return markdown text. Do NOT return explanations. ONLY the raw JSON object starting with {{ and ending with }}.
+
+EXAMPLE OF CORRECT OUTPUT FORMAT:
+{{
+  "title": "Understanding Next.js Architecture",
+  "phase_number": 2,
+  "phase_title": "Core Concepts & Fundamentals",
+  "overview": "## Introduction\n\nNext.js is...\n\n## Core Concepts\n\n...",
+  "why_important": "...",
+  "key_concepts": ["..."],
+  ...
+}}
+
+NOW GENERATE THE JSON OBJECT FOR THE TOPIC ABOVE. RETURN ONLY THE JSON, NOTHING ELSE.

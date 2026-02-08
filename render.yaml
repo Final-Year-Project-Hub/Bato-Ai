@@ -11,10 +11,7 @@ services:
     # Environment variable linking to the Redis service below
     envVars:
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: bato-cache
-          property: connectionString
+        sync: false # User provides external Redis URL (Redis Labs)
       - key: PYTHON_VERSION
         value: 3.11.0
       - key: PORT
@@ -31,10 +28,3 @@ services:
         sync: false
       - key: QDRANT_API_KEY
         sync: false
-
-  - type: redis
-    name: bato-cache
-    region: singapore
-    plan: free # Use free tier for development
-    ipAllowList: [] # Access only from internal services
-    maxMemoryPolicy: allkeys-lru # Evict least recently used keys when full
