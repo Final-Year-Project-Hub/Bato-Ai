@@ -30,8 +30,8 @@ Return a SINGLE JSON object matching this structure:
   "learning_resources": [
     {{
       "title": "Resource Title",
-      "type": "article" | "video" | "documentation",
-      "url": " STRICTLY EXTRACT FROM CONTEXT. If no URL in context matches, leave null.",
+      "type": "documentation",
+      "url": " STRICTLY EXTRACT FROM CONTEXT.Only generate urls form the documentation CONTEXT above.  .If no URL in context matches, leave null.",
       "estimated_time": "15 mins"
     }}
   ],
@@ -48,6 +48,10 @@ Return a SINGLE JSON object matching this structure:
   ],
   "estimated_hours": 2.5,
   "difficulty_level": "beginner",
+  "doc_links": [
+    "STRICTLY EXTRACT URLs from the DOCUMENTATION CONTEXT above.",
+    "Do NOT generate or guess URLs. If none are found in the documentation CONTEXT for this topic, return an empty list."
+  ]
 }}
 
 CRITICAL RULES:
