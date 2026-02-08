@@ -527,6 +527,7 @@ class RoadmapService:
         num_phases, topics_per_phase = self.roadmap_calculator.calculate_structure(
             scope=scope,
             proficiency=proficiency,
+            intent=intent_val,  # Added missing intent parameter
             docs_retrieved=docs_count,
             avg_doc_score=avg_score,
             expected_docs=10  # k parameter from retrieval
@@ -846,6 +847,7 @@ class RoadmapService:
             num_phases, topics_per_phase = self.roadmap_calculator.calculate_structure(
                 scope=scope,
                 proficiency=extracted.proficiency,
+                intent=extracted.intent,  # Added missing intent parameter
                 docs_retrieved=docs_count,
                 avg_doc_score=avg_score,
                 expected_docs=10
