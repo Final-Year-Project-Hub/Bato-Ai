@@ -1048,18 +1048,45 @@ class RoadmapService:
         except Exception as e:
             logger.error(f"Failed to generate topic detail: {e}")
             # Fallback to simple object if parsing fails
+            from app.schemas.roadmap import (
+                TopicSections, IntroductionSection, DetailedCoreConcept, CodeExample
+            )
+            
             return TopicDetail(
                 title=topic_title,
                 phase_number=phase_number,
                 phase_title=phase_title,
-                overview=f"Failed to generate detailed content. Please try again.",
+                sections=TopicSections(
+                    introduction=IntroductionSection(
+                        markdown="## Introduction\n\nFailed to generate detailed content. Please try again."
+                    ),
+                    detailed_core_concepts=[
+                        DetailedCoreConcept(
+                            title="Error Recovery",
+                            markdown="### Error Recovery\n\nTechnical error during generation.",
+                            key_points=["Retry generation"]
+                        )
+                    ],
+                    code_examples=[
+                        CodeExample(
+                            title="Example Unavailable",
+                            language="text",
+                            code="// Error during generation",
+                            explanation_markdown="Please retry to generate code examples."
+                        )
+                    ],
+                    real_world_examples=[],
+                    hypothetical_scenario=None,
+                    key_characteristics=[]
+                ),
                 why_important="Technical error during generation.",
                 key_concepts=["Error recovery"],
                 learning_objectives=["Retry generation"],
                 learning_resources=[],
                 practice_exercises=[],
                 estimated_hours=1.0,
-                difficulty_level="beginner"
+                difficulty_level="beginner",
+                doc_links=[]
             )
     
     async def stream_topic_detail(

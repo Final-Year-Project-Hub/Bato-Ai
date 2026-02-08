@@ -69,18 +69,62 @@ class PracticeExercise(BaseModel):
     estimated_time: str
 
 
+# New nested section models
+class IntroductionSection(BaseModel):
+    """Introduction section with markdown content."""
+    markdown: str = Field(..., description="Markdown formatted introduction")
+
+
+class DetailedCoreConcept(BaseModel):
+    """A single detailed core concept."""
+    title: str
+    markdown: str = Field(..., description="Markdown explanation of the concept")
+    key_points: List[str] = Field(default_factory=list, description="Key points for this concept")
+
+
+class CodeExample(BaseModel):
+    """Code example with explanation."""
+    title: str
+    language: str = Field(..., description="Programming language (jsx, ts, js, python, etc)")
+    code: str = Field(..., description="Full code example")
+    explanation_markdown: str = Field(..., description="Markdown explanation of the code")
+
+
+class RealWorldExample(BaseModel):
+    """Real-world usage example."""
+    title: str = Field(..., description="Company or product name")
+    markdown: str = Field(..., description="Markdown explanation of real-world usage")
+
+
+class HypotheticalScenario(BaseModel):
+    """Hypothetical scenario demonstrating the topic."""
+    title: str
+    markdown: str = Field(..., description="Markdown description of the scenario")
+
+
+class TopicSections(BaseModel):
+    """Nested sections containing detailed topic content."""
+    introduction: IntroductionSection
+    detailed_core_concepts: List[DetailedCoreConcept] = Field(..., min_length=1)
+    code_examples: List[CodeExample] = Field(..., min_length=1)
+    real_world_examples: List[RealWorldExample] = Field(default_factory=list)
+    hypothetical_scenario: Optional[HypotheticalScenario] = None
+    key_characteristics: List[str] = Field(default_factory=list)
+
+
 class TopicDetail(BaseModel):
-    """Detailed topic content for deep-dive page."""
+    """Detailed topic content for deep-dive page with nested sections."""
     # Basic info
     title: str
     phase_number: int
     phase_title: str
     
-    # Detailed content
-    overview: str = Field(..., description="Comprehensive overview (3-4 paragraphs)")
+    # Main content sections (nested structure)
+    sections: TopicSections
+    
+    # Supporting content
     why_important: str = Field(..., description="Why this topic matters")
-    key_concepts: List[str] = Field(..., description="5-10 key concepts to learn")
-    prerequisites: List[str] = Field(default_factory=list)
+    key_concepts: List[str] = Field(..., description="List of key concepts")
     
     # Learning path
     learning_objectives: List[str] = Field(..., description="What you'll learn")

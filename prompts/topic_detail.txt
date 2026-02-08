@@ -19,14 +19,63 @@ Return a SINGLE JSON object matching this structure:
   "title": "{{TOPIC_TITLE}}",
   "phase_number": {{PHASE_NUMBER}},
   "phase_title": "{{PHASE_TITLE}}",
-  "overview": "THIS IS THE MAIN CONTENT. Write a long, structured Markdown article here. It MUST include:\n1. **Introduction**: Clear definition.\n2. **Detailed Core Concepts**: Deep explanation of how it works.\n3. **Code Examples**: MULTIPLE blocks of code with explanation. Do not just show syntax, show usage.\n4. **Real-World Examples**: How companies (like Netflix, Uber) use this concept.\n5. **Hypothetical Scenario**: A concrete example (e.g., 'Imagine building an E-commerce site...').\n6. **Key Characteristics**: Bullet points of main features.",
-  "why_important": "1-2 paragraphs on why this matters in the industry.",
-  "key_concepts": [
-    "List of 5-10 key terms to master (e.g. 'Virtual DOM', 'Reconciliation')"
-  ],
+
+  "sections": {{
+    "introduction": {{
+      "markdown": "## Introduction\n\nWrite a deep, clear introduction explaining what this topic is and why it matters."
+    }},
+
+    "detailed_core_concepts": [
+      {{
+        "title": "Concept Name 1",
+        "markdown": "### Concept Name 1\n\nExplain this concept deeply with examples and intuition.",
+        "key_points": ["Point 1", "Point 2", "Point 3"]
+      }},
+      {{
+        "title": "Concept Name 2",
+        "markdown": "### Concept Name 2\n\nExplain this concept deeply with examples and intuition.",
+        "key_points": ["Point 1", "Point 2", "Point 3"]
+      }}
+    ],
+
+    "code_examples": [
+      {{
+        "title": "Example Title",
+        "language": "jsx | ts | js | python | etc",
+        "code": "Put the full code example here",
+        "explanation_markdown": "Explain what this code does, why it matters, and how it works step by step."
+      }}
+    ],
+
+    "real_world_examples": [
+      {{
+        "title": "Company or Product Name",
+        "markdown": "Explain realistically how this concept is used in the real world."
+      }}
+    ],
+
+    "hypothetical_scenario": {{
+      "title": "Scenario Title",
+      "markdown": "Describe a realistic scenario where this topic is applied and walk through the reasoning."
+    }},
+
+    "key_characteristics": [
+      "Characteristic 1",
+      "Characteristic 2",
+      "Characteristic 3"
+    ]
+  }},
+
+  "why_important": "Explain clearly and persuasively why this topic is important for developers.",
+
+  "key_concepts": ["Concept 1", "Concept 2", "Concept 3"],
+
   "learning_objectives": [
-    "List of 3-5 specific skills (e.g. 'Build a functional component')"
+    "Specific measurable skill 1",
+    "Specific measurable skill 2",
+    "Specific measurable skill 3"
   ],
+
   "learning_resources": [
     {{
       "title": "Resource Title",
@@ -35,23 +84,23 @@ Return a SINGLE JSON object matching this structure:
       "estimated_time": "15 mins"
     }}
   ],
+
   "practice_exercises": [
     {{
       "title": "Exercise Title",
-      "description": "Specific coding task. e.g. 'Create a UserCard component that accepts props...'",
-      "difficulty": "beginner",
+      "description": "A concrete, practical coding task for the student.",
+      "difficulty": "beginner | intermediate | advanced",
       "estimated_time": "30 mins"
     }}
   ],
-  "related_topics": [
-    "List of related topics"
-  ],
+
+  "related_topics": ["Related Topic 1", "Related Topic 2"],
   "estimated_hours": 2.5,
-  "difficulty_level": "beginner",
+  "difficulty_level": "beginner | intermediate | advanced",
   "doc_links": [
-    "STRICTLY EXTRACT URLs from the DOCUMENTATION CONTEXT above.",
-    "Do NOT generate or guess URLs. If none are found in the documentation CONTEXT for this topic, return an empty list."
-  ]
+      "STRICTLY EXTRACT URLs from the DOCUMENTATION CONTEXT above.",
+      "Do NOT generate or guess URLs. If none are found in the documentation CONTEXT for this topic, return an empty list."
+    ]
 }}
 
 CRITICAL RULES:
