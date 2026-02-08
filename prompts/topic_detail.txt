@@ -46,13 +46,8 @@ Return a SINGLE JSON object matching this structure:
   "related_topics": [
     "List of related topics"
   ],
-  "next_topic": "Next logical topic",
   "estimated_hours": 2.5,
   "difficulty_level": "beginner",
-  "doc_links": [
-    "STRICTLY EXTRACT URLs from the DOCUMENTATION CONTEXT above.",
-    "Do NOT generate or guess URLs. If none are found in the context for this topic, return an empty list."
-  ]
 }}
 
 CRITICAL RULES:
