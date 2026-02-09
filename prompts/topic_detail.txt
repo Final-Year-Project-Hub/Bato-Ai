@@ -15,56 +15,56 @@ Compare the depth to a high-quality Medium article or an official documentation 
 
 JSON OUTPUT STRUCTURE:
 Return a SINGLE JSON object matching this structure:
-{{
+{
   "title": "{{TOPIC_TITLE}}",
   "phase_number": {{PHASE_NUMBER}},
   "phase_title": "{{PHASE_TITLE}}",
 
-  "sections": {{
-    "introduction": {{
+  "sections": {
+    "introduction": {
       "markdown": "## Introduction\n\nWrite a deep, clear introduction explaining what this topic is and why it matters."
-    }},
+    },
 
     "detailed_core_concepts": [
-      {{
+      {
         "title": "Concept Name 1",
         "markdown": "### Concept Name 1\n\nExplain this concept deeply with examples and intuition.",
         "key_points": ["Point 1", "Point 2", "Point 3"]
-      }},
-      {{
+      },
+      {
         "title": "Concept Name 2",
         "markdown": "### Concept Name 2\n\nExplain this concept deeply with examples and intuition.",
         "key_points": ["Point 1", "Point 2", "Point 3"]
-      }}
+      }
     ],
 
     "code_examples": [
-      {{
+      {
         "title": "Example Title",
         "language": "jsx | ts | js | python | etc",
         "code": "Put the full code example here",
         "explanation_markdown": "Explain what this code does, why it matters, and how it works step by step."
-      }}
+      }
     ],
 
     "real_world_examples": [
-      {{
+      {
         "title": "Company or Product Name",
         "markdown": "Explain realistically how this concept is used in the real world."
-      }}
+      }
     ],
 
-    "hypothetical_scenario": {{
+    "hypothetical_scenario": {
       "title": "Scenario Title",
       "markdown": "Describe a realistic scenario where this topic is applied and walk through the reasoning."
-    }},
+    },
 
     "key_characteristics": [
       "Characteristic 1",
       "Characteristic 2",
       "Characteristic 3"
     ]
-  }},
+  },
 
   "why_important": "Explain clearly and persuasively why this topic is important for developers.",
 
@@ -77,28 +77,28 @@ Return a SINGLE JSON object matching this structure:
   ],
 
   "learning_resources": [
-    {{
+    {
       "title": "Resource Title",
       "type": "documentation",
       "url": " STRICTLY EXTRACT FROM CONTEXT.Only generate urls form the documentation CONTEXT above.  .If no URL in context matches, leave null.",
       "estimated_time": "15 mins"
-    }}
+    }
   ],
 
   "practice_exercises": [
-    {{
+    {
       "title": "Exercise Title",
       "description": "A concrete, practical coding task for the student.",
       "difficulty": "beginner | intermediate | advanced",
       "estimated_time": "30 mins"
-    }}
+    }
   ],
 
   "related_topics": ["Related Topic 1", "Related Topic 2"],
   "next_topic": "Next logical topic",
   "estimated_hours": 2.5,
   "difficulty_level": "beginner | intermediate | advanced",
-}}
+}
 
 CRITICAL RULES:
 1. **Be Verbose**: The `overview` field should be LONG and DETAILED. Use Markdown headers (##, ###) to structure it.
@@ -108,7 +108,7 @@ CRITICAL RULES:
 5. **JSON ONLY - NO MARKDOWN**: You MUST return ONLY a valid JSON object. Do NOT wrap it in markdown code blocks. Do NOT return markdown text. Do NOT return explanations. ONLY the raw JSON object starting with {{ and ending with }}.
 
 EXAMPLE OF CORRECT OUTPUT FORMAT:
-{{
+{
   "title": "Understanding Next.js Architecture",
   "phase_number": 2,
   "phase_title": "Core Concepts & Fundamentals",
@@ -116,6 +116,6 @@ EXAMPLE OF CORRECT OUTPUT FORMAT:
   "why_important": "...",
   "key_concepts": ["..."],
   ...
-}}
+}
 
 NOW GENERATE THE JSON OBJECT FOR THE TOPIC ABOVE. RETURN ONLY THE JSON, NOTHING ELSE.
