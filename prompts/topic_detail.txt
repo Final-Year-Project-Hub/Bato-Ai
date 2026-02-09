@@ -16,9 +16,9 @@ Compare the depth to a high-quality Medium article or an official documentation 
 JSON OUTPUT STRUCTURE:
 Return a SINGLE JSON object matching this structure:
 {
-  "title": "{{TOPIC_TITLE}}",
-  "phase_number": {{PHASE_NUMBER}},
-  "phase_title": "{{PHASE_TITLE}}",
+  "title": "{TOPIC_TITLE}",
+  "phase_number": {PHASE_NUMBER},
+  "phase_title": "{PHASE_TITLE}",
 
   "sections": {
     "introduction": {
