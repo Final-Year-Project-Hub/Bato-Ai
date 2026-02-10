@@ -1,55 +1,105 @@
-You are an expert educator creating a quiz to test understanding of a learning topic.
+You are an expert quiz designer. Generate 7 multiple-choice questions from the topic data below.
 
-TOPIC INFORMATION:
-Goal: {goal}
-Phase: {phase_title}
-Topic: {topic_title}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOPIC DATA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-TOPIC CONTENT:
-{topic_content}
+Goal: {goal} | Phase {phase_number}: {phase_title} | Topic: {topic_title}
+Difficulty: {difficulty_level} | Study Time: {estimated_hours}h
 
-INSTRUCTIONS:
-Generate a quiz with 5-7 multiple-choice questions that test understanding of the key concepts covered in the topic content above.
+WHY IT MATTERS: {why_important}
 
-REQUIREMENTS:
-1. Questions should be clear, unambiguous, and directly related to the topic content
-2. Each question must have exactly 4 options (A, B, C, D)
-3. Only ONE correct answer per question
-4. Include a mix of difficulty levels: 2 easy, 3 medium, 2 hard questions
-5. Cover different aspects and concepts from the topic
-6. Provide brief, clear explanations for why the correct answer is right
-7. Avoid trick questions - focus on genuine understanding
-8. Make incorrect options plausible but clearly wrong to someone who understood the content
+KEY CONCEPTS (test all): 
+{key_concepts}
 
-OUTPUT FORMAT (strict JSON):
+LEARNING OBJECTIVES: 
+{learning_objectives}
+
+INTRODUCTION: {introduction}
+
+DETAILED CONCEPTS:
+{detailed_core_concepts}
+
+CODE EXAMPLES: 
+{code_examples}
+
+REAL WORLD: 
+{real_world_examples}
+
+SCENARIO: 
+{hypothetical_scenario}
+
+CHARACTERISTICS: {key_characteristics}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STRUCTURE: Exactly 7 questions (2 easy, 3 medium, 2 hard)
+
+DIFFICULTY RULES:
+- EASY: Recall definitions/basics from INTRODUCTION or KEY_CHARACTERISTICS. Source: first 2-3 KEY_CONCEPTS.
+- MEDIUM: Apply concepts to scenarios from REAL_WORLD_EXAMPLES. Compare/contrast concepts. Source: any KEY_CONCEPTS.
+- HARD: Code analysis (if CODE_EXAMPLES exist), HYPOTHETICAL_SCENARIO application, or multi-concept synthesis. MUST use CODE_EXAMPLES for ≥1 hard question if they exist.
+
+COVERAGE:
+- Every KEY_CONCEPT tested ≥1 time
+- First 3 KEY_CONCEPTS tested 2 times each
+- Each question maps to 1 KEY_CONCEPT + 1 LEARNING_OBJECTIVE
+
+CODE QUESTIONS (if CODE_EXAMPLES exist):
+- Minimum 2 code questions (1 medium, 1 hard)
+- Use ONLY syntax/APIs from CODE_EXAMPLES (never invent)
+- Keep snippets <15 lines
+- Focus: output prediction, bug ID, or consequence analysis
+
+QUALITY STANDARDS:
+✓ Questions: Clear, unambiguous, sufficient context
+✓ Distractors: Plausible, based on common misconceptions, similar length
+✓ Correct answer: Directly traceable to TOPIC DATA, unambiguous
+✓ Explanations: 2-4 sentences. Must explain WHY correct, WHY main distractor wrong, reference KEY_CONCEPTS/KEY_POINTS
+
+FORBIDDEN:
+✗ "All/none of the above"
+✗ Invented APIs/syntax not in CODE_EXAMPLES
+✗ Content not in TOPIC DATA
+✗ Pure trivia/acronym questions
+✗ Questions about RELATED_TOPICS
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OUTPUT (JSON only, no markdown)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 {{
   "questions": [
     {{
       "id": 1,
-      "question": "Clear question text here?",
-      "options": {{
-        "A": "First option",
-        "B": "Second option",
-        "C": "Third option",
-        "D": "Fourth option"
-      }},
+      "question": "...",
+      "options": {{"A": "...", "B": "...", "C": "...", "D": "..."}},
       "correctAnswer": "B",
-      "explanation": "Brief explanation of why B is correct and why it matters",
-      "difficulty": "medium",
-      "concept": "Main concept being tested (e.g., 'React Hooks', 'State Management')"
+      "explanation": "B is correct because [KEY_POINT reference]. A is wrong because [why]. This supports [LEARNING_OBJECTIVE].",
+      "difficulty": "easy|medium|hard",
+      "concept": "EXACT text from KEY_CONCEPTS",
+      "learningObjective": "EXACT text from LEARNING_OBJECTIVES",
+      "sourceSection": "introduction|detailed_core_concepts|code_examples|real_world_examples|hypothetical_scenario"
     }}
   ],
   "metadata": {{
-    "totalQuestions": 5,
-    "estimatedTime": "8-10 minutes",
+    "totalQuestions": 7,
+    "difficultyBreakdown": {{"easy": 2, "medium": 3, "hard": 2}},
+    "conceptCoverage": {{"Concept 1": 2, "Concept 2": 1, ...}},
+    "codeQuestionCount": 2,
+    "estimatedTime": "8-12 minutes",
     "passingScore": 70
   }}
 }}
 
-IMPORTANT:
-- Return ONLY valid JSON, no additional text
-- Ensure all questions are relevant to the topic content provided
-- Make sure the quiz tests actual understanding, not just memorization
-- Keep explanations concise but informative (1-2 sentences)
+VALIDATE before submitting:
+☐ 7 questions (2/3/2 difficulty)
+☐ All KEY_CONCEPTS tested
+☐ First 3 concepts appear 2x
+☐ ≥2 code questions if CODE_EXAMPLES exist
+☐ All "concept"/"learningObjective" fields exact matches
+☐ No invented content
 
-Generate the quiz now:
+Generate quiz now. Return ONLY JSON.

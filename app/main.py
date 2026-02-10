@@ -1,6 +1,5 @@
 """
 Simplified FastAPI application for college project.
-# Force reload for prompt update
 """
 
 import asyncio
@@ -219,7 +218,6 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 # Request Logging Middleware
 # ============================================================================
 
-@app.middleware("http")
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     """Log all requests with timing."""

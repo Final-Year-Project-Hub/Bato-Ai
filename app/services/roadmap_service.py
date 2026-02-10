@@ -1181,125 +1181,218 @@ class RoadmapService:
         """
         logger.info(f"🎯 Generating quiz for: {topic_title} (Phase: {phase_title})")
         
-        try:
-            # Load quiz generation prompt
-            prompt_template = load_prompt("quiz_generation")
-            
-            # Format topic content as text for the prompt
-            content_text = self._format_topic_content_for_quiz(topic_content)
-            
-            # Generate prompt
-            prompt = prompt_template.format(
-                goal=goal,
-                phase_title=phase_title,
-                topic_title=topic_title,
-                topic_content=content_text
-            )
-            
-            # Use GroqLLM directly for fast generation
-            from app.core.groq_llm import GroqLLM
-            from langchain_core.messages import SystemMessage
-            
-            groq_llm = GroqLLM()
-            
-            # Generate quiz
-            logger.info("Calling Groq LLM for quiz generation...")
-            response = await groq_llm.ainvoke([SystemMessage(content=prompt)])
-            
-            response_text = response.content if hasattr(response, "content") else str(response)
-            logger.info(f"Groq returned {len(response_text)} characters")
-            
-            # Parse JSON response
-            json_str = response_text.strip()
-            
-            # Remove markdown code blocks
-            if json_str.startswith("```json"):
-                json_str = json_str[7:].lstrip()
-            elif json_str.startswith("```"):
-                json_str = json_str[3:].lstrip()
-            
-            if json_str.endswith("```"):
-                json_str = json_str[:-3].rstrip()
-            
-            # Ensure starts with {
-            json_str = json_str.strip()
-            if not json_str.startswith('{'):
-                start = json_str.find('{')
-                if start >= 0:
-                    json_str = json_str[start:]
-            
-            # Parse JSON
-            quiz_data = json.loads(json_str)
-            
-            logger.info(f"✅ Generated quiz with {len(quiz_data.get('questions', []))} questions")
-            
-            return quiz_data
-            
-        except Exception as e:
-            logger.error(f"Quiz generation failed: {e}", exc_info=True)
-            # Return a fallback empty quiz structure
-            return {
-                "questions": [],
-                "metadata": {
-                    "totalQuestions": 0,
-                    "estimatedTime": "0 minutes",
-                    "passingScore": 70,
-                    "error": str(e)
-                }
-            }
+        # Implement retry logic for Groq 503s
+        max_retries = 3
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                # Load quiz generation prompt
+                prompt_template = load_prompt("quiz_generation")
+                
+                # Format topic content as text for the prompt
+                quiz_payload = self._format_topic_content_for_quiz(topic_content)
+                print(quiz_payload)
+                
+                # Generate prompt
+                prompt = prompt_template.format(
+                    goal=goal,
+                    phase_title=phase_title,
+                    phase_number=quiz_payload["phase_number"],
+                    topic_title=topic_title,
+                    estimated_hours=quiz_payload["estimated_hours"],
+                    difficulty_level=quiz_payload["difficulty_level"],
+                    why_important=quiz_payload["why_important"],
+                    key_concepts=quiz_payload["key_concepts_text"],
+                    learning_objectives=quiz_payload["learning_objectives_text"],
+                    introduction=quiz_payload["introduction"],
+                    detailed_core_concepts=quiz_payload["core_concepts_text"],
+                    code_examples=quiz_payload["code_examples_text"],
+                    real_world_examples=quiz_payload["real_world_examples_text"],
+                    hypothetical_scenario=quiz_payload["hypothetical_scenario_text"],
+                    key_characteristics=quiz_payload["key_characteristics_text"]
+                )
+                
+                # Use GroqLLM directly for fast generation
+                from app.core.groq_llm import GroqLLM
+                from langchain_core.messages import SystemMessage
+                
+                groq_llm = GroqLLM()
+                
+                # Generate quiz
+                logger.info(f"Calling Groq LLM for quiz generation (Attempt {attempt + 1}/{max_retries})...")
+                response = await groq_llm.ainvoke([SystemMessage(content=prompt)])
+                
+                response_text = response.content if hasattr(response, "content") else str(response)
+                logger.info(f"Groq returned {len(response_text)} characters")
+                
+                # Parse JSON response
+                json_str = response_text.strip()
+                
+                # Remove markdown code blocks
+                if json_str.startswith("```json"):
+                    json_str = json_str[7:].lstrip()
+                elif json_str.startswith("```"):
+                    json_str = json_str[3:].lstrip()
+                
+                if json_str.endswith("```"):
+                    json_str = json_str[:-3].rstrip()
+                
+                # Ensure starts with {
+                json_str = json_str.strip()
+                if not json_str.startswith('{'):
+                    start = json_str.find('{')
+                    if start >= 0:
+                        json_str = json_str[start:]
+                
+                # Parse JSON
+                quiz_data = json.loads(json_str)
+                
+                # Basic validation
+                if not isinstance(quiz_data, dict) or "questions" not in quiz_data:
+                     raise ValueError("Invalid quiz format received from AI")
+                
+                logger.info(f"✅ Generated quiz with {len(quiz_data.get('questions', []))} questions")
+                
+                return quiz_data
+                
+            except Exception as e:
+                logger.warning(f"Quiz generation attempt {attempt + 1} failed: {e}")
+                last_error = e
+                # Wait before retry (exponential backoff: 1s, 2s, 4s)
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)
+        
+        # If we get here, all retries failed
+        logger.error(f"All quiz generation attempts failed. Last error: {last_error}")
+        raise last_error or Exception("Quiz generation failed after retries")
     
-    def _format_topic_content_for_quiz(self, topic_content: Dict[str, Any]) -> str:
+    def _format_topic_content_for_quiz(self, topic_content: Dict[str, Any]) -> Dict[str, str]:
         """
-        Format topic content dictionary into readable text for quiz generation.
+        Format topic content dictionary into structured text components for quiz prompt.
         
         Args:
             topic_content: The topic content dictionary
             
         Returns:
-            Formatted text representation
+            Dictionary with formatted text components for the prompt
         """
-        parts = []
+        # 1. Extract Difficulty
+        difficulty_level = topic_content.get("difficulty", "Intermediate")
         
-        # Add overview if present
-        if "overview" in topic_content:
-            parts.append(f"Overview:\n{topic_content['overview']}\n")
-        
-        # Add key concepts
-        if "key_concepts" in topic_content:
-            parts.append("Key Concepts:")
-            for concept in topic_content["key_concepts"]:
+        # 2. Key Concepts Text
+        key_concepts = topic_content.get("key_concepts", [])
+        if not key_concepts:
+            key_concepts_text = "No specific key concepts listed."
+        else:
+            concept_lines = []
+            for concept in key_concepts:
                 if isinstance(concept, dict):
-                    parts.append(f"- {concept.get('title', '')}: {concept.get('description', '')}")
+                    concept_lines.append(f"{concept.get('title', '')}: {concept.get('description', '')}")
                 else:
-                    parts.append(f"- {concept}")
-            parts.append("")
+                    concept_lines.append(str(concept))
+            key_concepts_text = "\n".join(concept_lines)
+
+        # 3. Core Concepts Text (Detailed)
+        # Try multiple paths
+        core_concepts = topic_content.get("content", {}).get("detailed_core_concepts", [])
+        if not core_concepts:
+            core_concepts = topic_content.get("content", {}).get("sections", {}).get("detailed_core_concepts", [])
+        if not core_concepts:
+            core_concepts = topic_content.get("detailed_core_concepts", [])
+             
+        if not core_concepts:
+             core_concepts_text = "No detailed concepts available."
+        else:
+            core_concepts_text = ""
+            for i, c in enumerate(core_concepts):
+                title = c.get("title", f"Concept {i+1}")
+                markdown = c.get("markdown", "")
+                key_points = "; ".join(c.get("key_points", []))
+                core_concepts_text += f"\n{i+1}. {title}\n{markdown}\nKey Points: {key_points}\n"
+
+        # 4. Learning Objectives Text
+        learning_objectives = topic_content.get("learning_objectives", [])
+        if not learning_objectives:
+            learning_objectives_text = "No specific learning objectives listed."
+        else:
+            learning_objectives_text = "\n".join([f"- {obj}" for obj in learning_objectives])
+
+        # 5. Code Examples Text
+        # Try multiple paths
+        code_examples = topic_content.get("code_examples", [])
+        if not code_examples:
+            code_examples = topic_content.get("content", {}).get("code_examples", [])
+        if not code_examples:
+             code_examples = topic_content.get("content", {}).get("sections", {}).get("code_examples", [])
+            
+        if not code_examples:
+            code_examples_text = "No code examples provided."
+        else:
+            examples_list = []
+            for i, ex in enumerate(code_examples):
+                title = ex.get("title", f"Example {i+1}")
+                lang = ex.get("language", "text")
+                code = ex.get("code", "")
+                explanation = ex.get("explanation_markdown", "") or ex.get("explanation", "")
+                examples_list.append(f"{i+1}. {title} ({lang})\n```{lang}\n{code}\n```\n{explanation}")
+            code_examples_text = "\n".join(examples_list)
+
+        # 6. Why Important
+        why_important = topic_content.get("why_important", "Not specified.")
+
+        # 7. Introduction
+        introduction = topic_content.get("content", {}).get("sections", {}).get("introduction", {}).get("markdown", "")
+        # Fallback
+        if not introduction and "sections" in topic_content and "introduction" in topic_content["sections"]:
+             introduction = topic_content["sections"]["introduction"].get("markdown", "")
+        if not introduction:
+            introduction = "No introduction provided."
+
+        # 8. Real World Examples
+        real_world = topic_content.get("content", {}).get("sections", {}).get("real_world_examples", [])
+        if not real_world and "sections" in topic_content: # Fallback
+            real_world = topic_content.get("sections", {}).get("real_world_examples", [])
         
-        # Add code examples
-        if "code_examples" in topic_content:
-            parts.append("Code Examples:")
-            for example in topic_content["code_examples"]:
-                if isinstance(example, dict):
-                    parts.append(f"\n{example.get('title', 'Example')}:")
-                    parts.append(f"```\n{example.get('code', '')}\n```")
-                    if "explanation" in example:
-                        parts.append(f"Explanation: {example['explanation']}")
-            parts.append("")
+        if not real_world:
+            real_world_text = "None provided."
+        else:
+            real_world_text = "\n".join([f"{i+1}. {rw.get('title', '')}: {rw.get('markdown', '')}" for i, rw in enumerate(real_world)])
+
+        # 9. Hypothetical Scenario
+        scenario = topic_content.get("content", {}).get("sections", {}).get("hypothetical_scenario", {})
+        if not scenario and "sections" in topic_content:
+            scenario = topic_content.get("sections", {}).get("hypothetical_scenario", {})
         
-        # Add best practices
-        if "best_practices" in topic_content:
-            parts.append("Best Practices:")
-            for practice in topic_content["best_practices"]:
-                parts.append(f"- {practice}")
-            parts.append("")
+        if not scenario:
+            scenario_text = "None provided."
+        else:
+            scenario_text = f"{scenario.get('title', 'Scenario')}\n{scenario.get('markdown', '')}"
+
+        # 10. Key Characteristics
+        characteristics = topic_content.get("content", {}).get("sections", {}).get("key_characteristics", [])
+        if not characteristics and "sections" in topic_content:
+            characteristics = topic_content.get("sections", {}).get("key_characteristics", [])
         
-        # Add common pitfalls
-        if "common_pitfalls" in topic_content:
-            parts.append("Common Pitfalls:")
-            for pitfall in topic_content["common_pitfalls"]:
-                parts.append(f"- {pitfall}")
-            parts.append("")
-        
-        return "\n".join(parts)
+        if not characteristics:
+            characteristics_text = "None provided."
+        else:
+            characteristics_text = "; ".join(characteristics)
+
+        return {
+            "phase_number": str(topic_content.get("phase_number", "0")),
+            "estimated_hours": str(topic_content.get("estimated_hours", "2")), 
+            "difficulty_level": difficulty_level,
+            "why_important": why_important,
+            "key_concepts_text": key_concepts_text,
+            "core_concepts_text": core_concepts_text,
+            "learning_objectives_text": learning_objectives_text,
+            "code_examples_text": code_examples_text,
+            "introduction": introduction,
+            "real_world_examples_text": real_world_text,
+            "hypothetical_scenario_text": scenario_text,
+            "key_characteristics_text": characteristics_text
+        }
     
     def get_metrics(self) -> Dict[str, Any]:
         """Get comprehensive service metrics."""

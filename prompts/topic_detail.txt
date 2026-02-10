@@ -95,7 +95,6 @@ Return a SINGLE JSON object matching this structure:
   ],
 
   "related_topics": ["Related Topic 1", "Related Topic 2"],
-  "next_topic": "Next logical topic",
   "estimated_hours": 2.5,
   "difficulty_level": "beginner | intermediate | advanced",
 }

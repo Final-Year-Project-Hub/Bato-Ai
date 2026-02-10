@@ -23,6 +23,8 @@ class QuizQuestion(BaseModel):
     explanation: str
     difficulty: str = Field(..., pattern="^(easy|medium|hard)$")
     concept: str
+    learningObjective: str
+    sourceSection: str
 
 
 class QuizMetadata(BaseModel):
