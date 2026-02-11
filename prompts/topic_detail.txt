@@ -80,7 +80,7 @@ Return a SINGLE JSON object matching this structure:
     {
       "title": "Resource Title",
       "type": "documentation",
-      "url": " STRICTLY EXTRACT FROM CONTEXT.Only generate urls form the documentation CONTEXT above.  .If no URL in context matches, leave null.",
+      "url": " Provide the URL of the official documentation only .",
       "estimated_time": "15 mins"
     }
   ],
