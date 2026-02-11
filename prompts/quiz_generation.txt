@@ -38,9 +38,10 @@ REQUIREMENTS
 STRUCTURE: Exactly 7 questions (2 easy, 3 medium, 2 hard)
 
 DIFFICULTY RULES:
-- EASY: Recall definitions/basics from INTRODUCTION or KEY_CHARACTERISTICS. Source: first 2-3 KEY_CONCEPTS.
-- MEDIUM: Apply concepts to scenarios from REAL_WORLD_EXAMPLES. Compare/contrast concepts. Source: any KEY_CONCEPTS.
-- HARD: Code analysis (if CODE_EXAMPLES exist), HYPOTHETICAL_SCENARIO application, or multi-concept synthesis. MUST use CODE_EXAMPLES for ≥1 hard question if they exist.
+- ALL EASY: Focus on recall of definitions, basic concepts, and fundamental understanding from INTRODUCTION, KEY_CHARACTERISTICS, and KEY_CONCEPTS.
+- Test recognition and comprehension of core terms and concepts
+- Use straightforward scenarios that require only basic application
+- Avoid complex synthesis or deep analysis
 
 COVERAGE:
 - Every KEY_CONCEPT tested ≥1 time
@@ -48,10 +49,10 @@ COVERAGE:
 - Each question maps to 1 KEY_CONCEPT + 1 LEARNING_OBJECTIVE
 
 CODE QUESTIONS (if CODE_EXAMPLES exist):
-- Minimum 2 code questions (1 medium, 1 hard)
+- Maximum 2 simple code questions focused on basic syntax recognition
 - Use ONLY syntax/APIs from CODE_EXAMPLES (never invent)
-- Keep snippets <15 lines
-- Focus: output prediction, bug ID, or consequence analysis
+- Keep snippets <10 lines
+- Focus: basic output prediction or simple syntax identification
 
 QUALITY STANDARDS:
 ✓ Questions: Clear, unambiguous, sufficient context
@@ -65,6 +66,8 @@ FORBIDDEN:
 ✗ Content not in TOPIC DATA
 ✗ Pure trivia/acronym questions
 ✗ Questions about RELATED_TOPICS
+✗ Complex multi-step reasoning
+✗ Deep analysis or synthesis questions
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT (JSON only, no markdown)
@@ -78,7 +81,7 @@ OUTPUT (JSON only, no markdown)
       "options": {{"A": "...", "B": "...", "C": "...", "D": "..."}},
       "correctAnswer": "B",
       "explanation": "B is correct because [KEY_POINT reference]. A is wrong because [why]. This supports [LEARNING_OBJECTIVE].",
-      "difficulty": "easy|medium|hard",
+      "difficulty": "easy",
       "concept": "EXACT text from KEY_CONCEPTS",
       "learningObjective": "EXACT text from LEARNING_OBJECTIVES",
       "sourceSection": "introduction|detailed_core_concepts|code_examples|real_world_examples|hypothetical_scenario"
@@ -86,7 +89,7 @@ OUTPUT (JSON only, no markdown)
   ],
   "metadata": {{
     "totalQuestions": 7,
-    "difficultyBreakdown": {{"easy": 2, "medium": 3, "hard": 2}},
+    "difficultyBreakdown": {{"easy": 7, "medium": 0, "hard": 0}},
     "conceptCoverage": {{"Concept 1": 2, "Concept 2": 1, ...}},
     "codeQuestionCount": 2,
     "estimatedTime": "8-12 minutes",
@@ -95,11 +98,12 @@ OUTPUT (JSON only, no markdown)
 }}
 
 VALIDATE before submitting:
-☐ 7 questions (2/3/2 difficulty)
+☐ 7 questions (ALL easy difficulty)
 ☐ All KEY_CONCEPTS tested
 ☐ First 3 concepts appear 2x
-☐ ≥2 code questions if CODE_EXAMPLES exist
+☐Maximum 2 simple code questions
 ☐ All "concept"/"learningObjective" fields exact matches
 ☐ No invented content
+☐ No complex reasoning required
 
 Generate quiz now. Return ONLY JSON.
