@@ -1278,7 +1278,7 @@ class RoadmapService:
             Dictionary with formatted text components for the prompt
         """
         # 1. Extract Difficulty
-        difficulty_level = topic_content.get("difficulty", "Intermediate")
+        difficulty_level = topic_content.get("difficulty", "Beginner")
         
         # 2. Key Concepts Text
         key_concepts = topic_content.get("key_concepts", [])
