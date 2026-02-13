@@ -210,8 +210,7 @@ class QueryAnalyzer:
         """
         try:
             # Invoke chain
-            response = await asyncio.to_thread(
-                self.chain_with_history.invoke,
+            response = await self.chain_with_history.ainvoke(
                 {"input": query},
                 config={"configurable": {"session_id": self.session_id}}
             )
