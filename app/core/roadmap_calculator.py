@@ -163,9 +163,9 @@ class RoadmapCalculator:
         
         # Broad scope indicators
         broad_keywords = [
-            "full-stack", "full stack", "mern", "mean", "complete",
+            "full-stack", "full stack","fullstack", "mern", "mean", "complete",
             "entire", "comprehensive", "end-to-end", "production",
-            "deployment", "architecture", "system design"
+            "deployment", "architecture", "system design","system","bot"
         ]
         
         # Check for narrow indicators
