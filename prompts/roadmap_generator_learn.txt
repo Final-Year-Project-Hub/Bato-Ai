@@ -169,7 +169,7 @@ Return ONLY valid JSON. No markdown code blocks, no explanations, no extra text.
                     "title": "Introduction to [Technology] and its Core Philosophy",
                     "description": "Learn the fundamental philosophy, architecture, key paradigms, and when to use [technology]",
                     "estimated_hours": 2.5,
-                    "doc_link": "https://..."
+                    "doc_link": ""
                 }},
                 {{
                     "title": "Setting Up Your Development Environment",
