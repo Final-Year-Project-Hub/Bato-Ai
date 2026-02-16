@@ -188,26 +188,25 @@ class BatoLLM(BaseChatModel):
         
         # API call with retry
         async def _api_call():
-             # Build formatted prompt for text generation
-             formatted_prompt = self._format_mistral_prompt(messages)
+             # Convert messages to API format for chat completion
+             messages_api = self._convert_messages(messages)
              logger.info(f"🤖 BatoLLM calling HuggingFace with model: {self.config.model_id}")
              
-             # Use text_generation instead of chat_completion
+             # Use chat_completion (Mistral supports conversational task)
              response = await asyncio.wait_for(
-                 self._client.text_generation(
-                     prompt=formatted_prompt,
-                     max_new_tokens=self.config.max_tokens,
+                 self._client.chat_completion(
+                     messages=messages_api,
+                     max_tokens=self.config.max_tokens,
                      temperature=self.config.temperature,
                      top_p=self.config.top_p,
-                     stop_sequences=stop or [],
-                     return_full_text=False
+                     stop=stop or []
                  ),
                  timeout=self.config.timeout
              )
              if(response):
                 logger.info(f"🤖 BatoLLM response extracted")
              
-             return response
+             return response.choices[0].message.content
         
         try:
             # Execute with retry
@@ -252,23 +251,24 @@ class BatoLLM(BaseChatModel):
         logger.info(f"🤖 BatoLLM streaming from HuggingFace with model: {self.config.model_id}")
         
         try:
-            # For AsyncInferenceClient, we need to handle streaming differently
-            # The text_generation method returns tokens as they're generated
-            generator = await self._client.text_generation(
-                prompt=formatted_prompt,
-                max_new_tokens=self.config.max_tokens,
+            # Convert messages to API format
+            messages_api = self._convert_messages(messages)
+            
+            # Use chat_completion with streaming (Mistral supports conversational task)
+            stream = await self._client.chat_completion(
+                messages=messages_api,
+                max_tokens=self.config.max_tokens,
                 temperature=self.config.temperature,
                 top_p=self.config.top_p,
-                stop_sequences=stop or [],
-                stream=True,
-                details=False,
-                return_full_text=False
+                stop=stop or [],
+                stream=True
             )
             
-            # Now iterate over the generator
-            async for token in generator:
-                if token:
-                    yield ChatGeneration(message=AIMessage(content=token))
+            # Iterate over the stream
+            async for chunk in stream:
+                content = chunk.choices[0].delta.content
+                if content:
+                    yield ChatGeneration(message=AIMessage(content=content))
                     
         except Exception as e:
             self._metrics["errors"] += 1
