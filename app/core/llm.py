@@ -252,8 +252,9 @@ class BatoLLM(BaseChatModel):
         logger.info(f"🤖 BatoLLM streaming from HuggingFace with model: {self.config.model_id}")
         
         try:
-            # Use text_generation with streaming - need to await the coroutine first
-            stream = self._client.text_generation(
+            # For AsyncInferenceClient, we need to handle streaming differently
+            # The text_generation method returns tokens as they're generated
+            generator = await self._client.text_generation(
                 prompt=formatted_prompt,
                 max_new_tokens=self.config.max_tokens,
                 temperature=self.config.temperature,
@@ -264,7 +265,8 @@ class BatoLLM(BaseChatModel):
                 return_full_text=False
             )
             
-            async for token in stream:
+            # Now iterate over the generator
+            async for token in generator:
                 if token:
                     yield ChatGeneration(message=AIMessage(content=token))
                     
