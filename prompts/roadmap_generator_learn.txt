@@ -154,55 +154,55 @@ Follow this process strictly:
 ## OUTPUT FORMAT
 Return ONLY valid JSON. No markdown code blocks, no explanations, no extra text.
 
-{{
-    "goal": "{{GOAL}}",
+{
+    "goal": "{GOAL}",
     "intent": "learn",
-    "proficiency": "{{PROFICIENCY}}",
+    "proficiency": "{PROFICIENCY}",
     "phases": [
-        {{
+        {
             "phase_number": 1,
             "title": "[Technology] Fundamentals and Setup",
             "description": "Establish foundation in [technology] core concepts and set up development environment",
             "estimated_hours": 15.0,
             "topics": [
-                {{
+                {
                     "title": "Introduction to [Technology] and its Core Philosophy",
                     "description": "Learn the fundamental philosophy, architecture, key paradigms, and when to use [technology]",
                     "estimated_hours": 2.5,
                     "doc_link": ""
-                }},
-                {{
+                },
+                {
                     "title": "Setting Up Your Development Environment",
                     "description": "Install and configure necessary tools, package managers, IDE/editor with extensions and utilities",
                     "estimated_hours": 2.0,
                     "doc_link": ""
-                }},
-                {{
+                },
+                {
                     "title": "Creating Your First [Technology] Application",
                     "description": "Initialize a new project, understand the project structure, and create your first working implementation",
                     "estimated_hours": 2.5,
                     "doc_link": ""
-                }},
-                {{
+                },
+                {
                     "title": "Understanding [Key Concept] in [Technology]",
                     "description": "Master [key concept] including syntax, semantics, patterns, and practical applications",
                     "estimated_hours": 3.0,
                     "doc_link": ""
-                }},
-                {{
+                },
+                {
                     "title": "Working with [Components/Modules] and [Core Mechanism]",
                     "description": "Create and work with [components/modules], understand [mechanism], and learn composition patterns",
                     "estimated_hours": 3.0,
                     "doc_link": ""
-                }},
-                {{
+                },
+                {
                     "title": "[Technology] Project Structure and Best Practices",
                     "description": "Learn recommended organization, naming conventions, code structure, and industry-standard practices",
                     "estimated_hours": 2.0,
                     "doc_link": ""
-                }}
+                }
             ]
-        }}
+        }
         // ... EXACTLY {{MIN_PHASES}} phases total with domain-appropriate content
     ],
     "total_estimated_hours": 0.0,
@@ -216,7 +216,7 @@ Return ONLY valid JSON. No markdown code blocks, no explanations, no extra text.
         "Related technology or specialization to explore",
         "Advanced certification or mastery path"
     ]
-}}
+}
 
 ## TOPIC QUALITY STANDARDS
 Each topic MUST:
