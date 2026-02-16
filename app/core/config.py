@@ -63,8 +63,8 @@ class Settings(BaseSettings):
 
 
     # Model Selection
-    QUERY_ANALYSIS_MODEL: str = Field(default="mistralai/Mistral-7B-Instruct-v0.3")
-    GENERATION_MODEL: str = Field(default="mistralai/Mistral-7B-Instruct-v0.3")
+    QUERY_ANALYSIS_MODEL: str = Field(default="Qwen/Qwen2.5-7B-Instruct")
+    GENERATION_MODEL: str = Field(default="Qwen/Qwen2.5-7B-Instruct")
 
     # GENERATION_MODEL=Qwen/Qwen2.5-7B-Instruct
 
