@@ -127,6 +127,21 @@ class BatoLLM(BaseChatModel):
                 prompt += f"{msg.content}\n\n"
         return prompt.strip()
     
+    def _format_mistral_prompt(self, messages: List[BaseMessage]) -> str:
+        """Format messages using Mistral's instruct template."""
+        formatted = ""
+        for msg in messages:
+            if isinstance(msg, SystemMessage):
+                # Mistral doesn't have explicit system role, prepend to first user message
+                formatted += f"{msg.content}\n\n"
+            elif isinstance(msg, HumanMessage):
+                formatted += f"[INST] {msg.content} [/INST]"
+            elif isinstance(msg, AIMessage):
+                formatted += f" {msg.content}</s>"
+            else:
+                formatted += f"[INST] {msg.content} [/INST]"
+        return formatted
+    
     async def _call_with_retry(
         self,
         func,
@@ -173,24 +188,26 @@ class BatoLLM(BaseChatModel):
         
         # API call with retry
         async def _api_call():
-             # Use AsyncInferenceClient for HuggingFace
-             messages_api = self._convert_messages(messages)
+             # Build formatted prompt for text generation
+             formatted_prompt = self._format_mistral_prompt(messages)
              logger.info(f"🤖 BatoLLM calling HuggingFace with model: {self.config.model_id}")
              
+             # Use text_generation instead of chat_completion
              response = await asyncio.wait_for(
-                 self._client.chat_completion(
-                     messages=messages_api,
-                     max_tokens=self.config.max_tokens,
+                 self._client.text_generation(
+                     prompt=formatted_prompt,
+                     max_new_tokens=self.config.max_tokens,
                      temperature=self.config.temperature,
                      top_p=self.config.top_p,
-                     stop=stop or []
+                     stop_sequences=stop or [],
+                     return_full_text=False
                  ),
                  timeout=self.config.timeout
              )
              if(response):
                 logger.info(f"🤖 BatoLLM response extracted")
              
-             return response.choices[0].message.content
+             return response
         
         try:
             # Execute with retry
@@ -230,24 +247,24 @@ class BatoLLM(BaseChatModel):
         """Async stream for ChatModel."""
         self._metrics["requests"] += 1
         
-        # Build prompt
-        messages_api = self._convert_messages(messages)
+        # Build formatted prompt for text generation
+        formatted_prompt = self._format_mistral_prompt(messages)
         logger.info(f"🤖 BatoLLM streaming from HuggingFace with model: {self.config.model_id}")
         
         try:
-            stream = await self._client.chat_completion(
-                messages=messages_api,
-                max_tokens=self.config.max_tokens,
+            # Use text_generation with streaming
+            async for token in self._client.text_generation(
+                prompt=formatted_prompt,
+                max_new_tokens=self.config.max_tokens,
                 temperature=self.config.temperature,
                 top_p=self.config.top_p,
-                stop=stop or [],
-                stream=True
-            )
-
-            async for chunk in stream:
-                content = chunk.choices[0].delta.content
-                if content:
-                    yield ChatGeneration(message=AIMessage(content=content))
+                stop_sequences=stop or [],
+                stream=True,
+                details=False,
+                return_full_text=False
+            ):
+                if token:
+                    yield ChatGeneration(message=AIMessage(content=token))
                     
         except Exception as e:
             self._metrics["errors"] += 1
