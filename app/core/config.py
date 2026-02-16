@@ -55,7 +55,8 @@ class Settings(BaseSettings):
     # HUGGING FACE / LLM (SECRETS)
     # ========================================================================
     HUGGINGFACE_API_TOKEN: SecretStr = Field(..., description="HF API token (required)")
-    LLM_PROVIDER: str = Field(default="huggingface", pattern="^(huggingface|openai)$")
+    LLM_PROVIDER: str = Field(default="groq", pattern="^(huggingface|openai|groq)$")
+
     
     # ========================================================================
     # MULTI-MODEL CONFIGURATION
