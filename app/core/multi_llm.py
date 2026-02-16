@@ -25,7 +25,7 @@ class MultiModelConfig:
     # Roadmap Generation: Main model for generating roadmaps
     generation_model: str = settings.GENERATION_MODEL
     generation_temperature: float = 0.2
-    generation_max_tokens: int = 3072
+    generation_max_tokens: int = 4096
     
     # Common settings
     api_token: str = ""
@@ -83,19 +83,18 @@ class MultiModelLLMManager:
         temperature: float,
         max_tokens: int,
         purpose: str
-    ) -> BatoLLM:
+    ):
         """Create LLM instance with specific configuration."""
-        config = LLMConfig(
-            provider=LLMProvider.HUGGINGFACE,
-            model_id=model_id,
-            api_token=self.config.api_token,
+        from app.core.groq_llm import GroqLLM
+        
+        # Create Groq LLM instance
+        llm = GroqLLM(
+            model_name=model_id,
             temperature=temperature,
             max_tokens=max_tokens,
-            timeout=self.config.timeout,
-            enable_caching=True  # Re-enable caching for AsyncInferenceClient
+            timeout=self.config.timeout
         )
         
-        llm = BatoLLM(config)
         logger.debug(f"Created {purpose} LLM: {model_id}")
         return llm
     
