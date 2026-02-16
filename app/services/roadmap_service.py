@@ -137,6 +137,7 @@ class RoadmapService:
         conversation_history: Optional[List[Dict[str, str]]] = None,
         user_context: Optional[Dict[str, Any]] = None,  # NEW
         strict_mode: Optional[bool] = None  # NEW
+        
     ) -> Union[Roadmap, ClarificationRequest]:
         """
         Process chat with optional user context for personalization.
@@ -573,7 +574,7 @@ class RoadmapService:
             PROFICIENCY=proficiency,
             TECH_STACK=', '.join(tech_stack or []),
             DOCS_COUNT=docs_count,
-            CONTEXT=context_str[:4500],
+            CONTEXT=context_str[:3000],
             MIN_PHASES=num_phases,  # Dynamic
             MAX_PHASES=num_phases,  # Dynamic
             TOPICS_PER_PHASE=topics_per_phase,  # Dynamic
@@ -905,7 +906,7 @@ class RoadmapService:
                 PROFICIENCY=proficiency,
                 TECH_STACK=', '.join(tech_stack),
                 DOCS_COUNT=docs_count,
-                CONTEXT=context_str[:4500],
+                CONTEXT=context_str[:3000],
                 MIN_PHASES=num_phases,  # Dynamic
                 MAX_PHASES=num_phases,  # Dynamic
                 TOPICS_PER_PHASE=topics_per_phase,  # Dynamic
