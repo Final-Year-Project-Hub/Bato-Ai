@@ -6,6 +6,18 @@ import asyncio
 import json
 import logging
 import re
+import time
+from contextlib import asynccontextmanager
+import json_repair # Robust JSON repair library
+
+@asynccontextmanager
+async def timer(name: str):
+    start = time.time()
+    try:
+        yield
+    finally:
+        elapsed = time.time() - start
+        logging.getLogger(__name__).info(f"⏱️ {name} took {elapsed:.4f}s")
 from typing import List, Optional, Dict, Any, AsyncGenerator, Union
 # Trigger reload for prompt update
 from langchain_core.messages import SystemMessage
@@ -484,7 +496,7 @@ class RoadmapService:
                 error_msg = (
                     f"No documentation found for {', '.join(tech_stack or ['the requested topic'])}. "
                     "Cannot generate roadmap without source material. "
-                    "Please try a different technology or check if documentation is available."
+                    "Please try a different technology."
                 )
                 logger.warning(f"Retrieval failed: {error_msg}")
                 raise InsufficientDocumentationError(
@@ -586,26 +598,23 @@ class RoadmapService:
             json_str = response_text.strip()
             
             # Remove markdown code block markers - simple and robust approach
-            # Remove opening markers
-            if json_str.startswith("```json"):
-                json_str = json_str[7:].lstrip()  # Remove ```json and any whitespace
-            elif json_str.startswith("```"):
-                json_str = json_str[3:].lstrip()  # Remove ``` and any whitespace
-            
-            # Remove closing markers
-            if json_str.endswith("```"):
-                json_str = json_str[:-3].rstrip()  # Remove trailing ``` and whitespace
-            
-            # Final cleanup - ensure we start with {
-            json_str = json_str.strip()
-            if not json_str.startswith('{'):
-                # Find the first { and extract from there
+            # Robust JSON extraction
+            # 1. Try to extract from markdown code blocks first (safest)
+            code_block_match = re.search(r"```(?:json)?\s*(.*?)```", json_str, re.DOTALL)
+            if code_block_match:
+                json_str = code_block_match.group(1)
+            else:
+                # 2. Fallback: Look for the first { and last }
+                # This is risky if there is trailing text with braces, but necessary if no code blocks
                 start = json_str.find('{')
-                if start >= 0:
-                    json_str = json_str[start:]
+                end = json_str.rfind('}')
+                if start >= 0 and end > start:
+                    json_str = json_str[start:end+1]
             
-            # Check if extracted JSON is empty
-            if not json_str or not json_str.strip():
+            # Final cleanup
+            json_str = json_str.strip()
+            
+            if not json_str:
                 logger.error("Extracted JSON string is empty")
                 raise ValueError("Failed to extract JSON from LLM response")
             
@@ -674,11 +683,19 @@ class RoadmapService:
                             else:
                                 raise e
                         except json.JSONDecodeError:
-                            logger.error(f"All JSON repair attempts failed")
-                            logger.error(f"Raw response (first 1000 chars): {response_text[:1000]}")
-                            logger.error(f"Extracted JSON (first 500 chars): {json_str[:500]}")
-                            logger.error(f"Extracted JSON (last 500 chars): {json_str[-500:]}")
-                            raise
+                            # Attempt 4: Ultimate fallback using json_repair
+                            try:
+                                logger.warning("Standard repair failed, attempting json_repair library...")
+                                data = json_repair.loads(json_str)
+                                # Validate key fields exist (json_repair might return partial dict)
+                                if not isinstance(data, dict):
+                                    raise ValueError("json_repair returned non-dict")
+                                logger.info("✅ json_repair successful")
+                            except Exception as e_repair:
+                                logger.error(f"All JSON repair attempts failed: {e_repair}")
+                                logger.error(f"Raw response (first 1000 chars): {response_text[:1000]}")
+                                logger.error(f"Extracted JSON (first 500 chars): {json_str[:500]}")
+                                raise e
             
             # Recalculate total hours just in case
             total_hours = sum(p.get('estimated_hours', 0) for p in data.get('phases', []))
@@ -689,12 +706,13 @@ class RoadmapService:
             data['retrieval_confidence'] = retrieval_confidence
             data['sources_used'] = sources_used
             
+            
             return Roadmap(**data)
                 
         except Exception as e:
             logger.error(f"Failed to parse roadmap generation: {e}")
             logger.debug(f"Raw response (first 1000 chars): {response_text[:1000]}...")
-            logger.debug(f"Extracted json_str (first 500 chars): {json_str[:500] if 'json_str' in locals() else 'N/A'}...")
+            # logger.debug(f"Extracted json_str: {json_str[:500]}...") 
             raise ValueError("Failed to generate valid roadmap format") from e
 
     async def process_chat_stream(
@@ -918,17 +936,23 @@ class RoadmapService:
             
             # 4. Cache the result (Background)
             try:
-                roadmap_data = self._parse_implied_roadmap(full_response)
-                
-                # Add metadata
-                roadmap_data.docs_retrieved_count = len(retrieved_docs)
-                roadmap_data.retrieval_confidence = self._calculate_confidence(len(retrieved_docs))
-                # Add source info
-                
-                self.cache.set(cache_key, roadmap_data)
-                logger.info(f"💾 Cached streaming result")
+                # Only attempt to cache if we have a complete response
+                if not full_response or len(full_response.strip()) < 50:
+                    logger.warning(f"Skipping cache: response too short ({len(full_response)} chars)")
+                elif not ('{' in full_response and '}' in full_response):
+                    logger.warning(f"Skipping cache: response doesn't contain valid JSON structure")
+                else:
+                    roadmap_data = self._parse_implied_roadmap(full_response)
+                    
+                    # Add metadata
+                    roadmap_data.docs_retrieved_count = len(retrieved_docs)
+                    roadmap_data.retrieval_confidence = self._calculate_confidence(len(retrieved_docs))
+                    # Add source info
+                    
+                    self.cache.set(cache_key, roadmap_data)
+                    logger.info(f"💾 Cached streaming result")
             except Exception as e:
-                logger.error(f"Failed to cache streaming result: {e}")
+                logger.warning(f"Failed to cache streaming result (non-critical): {e}")
                     
         except Exception as e:
             logger.error(f"Streaming error: {e}")
@@ -1416,3 +1440,4 @@ class RoadmapService:
         
         except Exception as e:
             return {"status": "unhealthy", "message": str(e)}
+
